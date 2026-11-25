@@ -1,5 +1,7 @@
 // GET /api/payables — contas a pagar | POST — criação manual
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,8 +34,11 @@ interface PayableBody {
   dueDate?: string
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'finance.payables.view')
+    if (!g.ok) return g.response
+
     const payables = await db.payable.findMany({
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -44,8 +49,11 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'finance.payables.manage')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as PayableBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

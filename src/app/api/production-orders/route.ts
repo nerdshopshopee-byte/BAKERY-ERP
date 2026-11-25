@@ -2,7 +2,9 @@
 // GET  /api/production-orders -> lista ordenada por createdAt desc, limite 100
 // POST /api/production-orders -> cria ordem { recipeId, plannedQty>0, notes?, operator? }
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -23,7 +25,10 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const g = await guardApi(request, 'production.view')
+  if (!g.ok) return g.response
+
   const orders = await db.productionOrder.findMany({
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -31,7 +36,10 @@ export async function GET() {
   return Response.json(orders)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const g = await guardApi(request, 'production.orders.create')
+  if (!g.ok) return g.response
+
   const body = await readBody(request)
 
   const recipeId = str(body.recipeId)

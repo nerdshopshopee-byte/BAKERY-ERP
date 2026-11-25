@@ -2,7 +2,9 @@
 // GET  /api/products?query=&categoryId=&active=true|false&limit=
 // POST /api/products -> cria produto { name, categoryId?, unit?, price, cost, ... }
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi, guardApiAny } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -23,7 +25,11 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Catálogo necessário para vender (PDV) OU para operar o estoque
+  const g = await guardApiAny(request, ['sales.view', 'inventory.view'])
+  if (!g.ok) return g.response
+
   const { searchParams } = new URL(request.url)
   const query = (searchParams.get('query') ?? '').trim().toLowerCase()
   const categoryId = (searchParams.get('categoryId') ?? '').trim()
@@ -67,10 +73,17 @@ export async function GET(request: Request) {
     }
   })
 
-  return Response.json(enriched)
+  // Segurança: custos de produtos só para quem pode consultar custos
+  const canSeeCosts = g.user.role.isAbsolute || g.user.permissions.includes('inventory.costs')
+  const sanitized = canSeeCosts ? enriched : enriched.map((p) => ({ ...p, cost: 0 }))
+
+  return Response.json(sanitized)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const g = await guardApi(request, 'inventory.products')
+  if (!g.ok) return g.response
+
   const body = await readBody(request)
 
   const name = str(body.name)

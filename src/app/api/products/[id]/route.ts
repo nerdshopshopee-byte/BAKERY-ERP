@@ -2,7 +2,9 @@
 // PATCH  /api/products/[id] -> atualiza campos enviados
 // DELETE /api/products/[id] -> hard delete; se houver dependência (SaleItem), soft-delete
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -36,7 +38,10 @@ type ProductUpdate = {
   notes?: string | null
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const g = await guardApi(request, 'inventory.products')
+  if (!g.ok) return g.response
+
   const { id } = await params
 
   const existing = await db.product.findUnique({ where: { id } })
@@ -118,9 +123,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const g = await guardApi(_request, 'inventory.products_delete')
+  if (!g.ok) return g.response
+
   const { id } = await params
 
   const existing = await db.product.findUnique({ where: { id } })

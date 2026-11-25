@@ -1,5 +1,7 @@
 // PATCH /api/deliverers/[id] — editar/ativar/desativar | DELETE — remove entregador
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,10 +34,13 @@ interface DelivererPatchBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as DelivererPatchBody | null
     if (!body || typeof body !== 'object') {
@@ -63,10 +68,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(_request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const deliverer = await db.deliverer.findUnique({ where: { id } })
     if (!deliverer) throw new HttpError(404, 'Entregador não encontrado')

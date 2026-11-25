@@ -1,5 +1,7 @@
 // PATCH /api/payables/[id] — ação: 'pay' (registrar pagamento da conta)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,10 +29,13 @@ interface PayableActionBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'finance.payables.manage')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as PayableActionBody | null
     if (body?.action !== 'pay') {

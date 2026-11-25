@@ -1,5 +1,7 @@
 // GET /api/cash/session — sessão atual e última sessão | POST — abrir/fechar caixa
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,8 +35,11 @@ interface SessionBody {
 }
 
 // GET: { current: sessão ABERTO mais recente ou null, last: última FECHADO ou null }
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'cash.view')
+    if (!g.ok) return g.response
+
     const current = await db.cashSession.findFirst({
       where: { status: 'ABERTO' },
       orderBy: { openedAt: 'desc' },
@@ -50,12 +55,16 @@ export async function GET() {
 }
 
 // POST: action 'open' | 'close'
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => null)) as SessionBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })
     }
+
+    // Permissão depende da ação: abrir caixa -> cash.open; fechar caixa -> cash.close
+    const g = await guardApi(request, body.action === 'close' ? 'cash.close' : 'cash.open')
+    if (!g.ok) return g.response
 
     if (body.action === 'open') {
       const operatorName = strField(body.operatorName)

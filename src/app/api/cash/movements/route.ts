@@ -1,5 +1,7 @@
 // GET /api/cash/movements?sessionId= — movimentos do caixa | POST — sangria/suprimento/ajuste
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,8 +33,11 @@ interface MovementBody {
 }
 
 // GET: query sessionId (obrigatório) | limit (default 100)
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'cash.view')
+    if (!g.ok) return g.response
+
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get('sessionId')
     if (!sessionId) {
@@ -52,8 +57,11 @@ export async function GET(request: Request) {
 }
 
 // POST: { sessionId, type: 'SANGRIA' | 'SUPRIMENTO' | 'AJUSTE', amount > 0, description }
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'cash.movements')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as MovementBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

@@ -1,5 +1,7 @@
 // GET /api/payments — pagamentos (Mercado Pago simulado)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,8 +20,11 @@ function toErrorResponse(error: unknown): Response {
 }
 
 // GET: query status | limit (default 100)
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'finance.payments')
+    if (!g.ok) return g.response
+
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Math.max(Math.trunc(num(searchParams.get('limit')) ?? 100), 1), 500)
     const status = searchParams.get('status')

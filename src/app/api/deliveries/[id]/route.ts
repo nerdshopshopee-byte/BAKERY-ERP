@@ -1,5 +1,7 @@
 // PATCH /api/deliveries/[id] — ações: dispatch (em rota), deliver (entregue), fail, assign (entregador)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,10 +28,13 @@ interface DeliveryPatchBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as DeliveryPatchBody | null
     const action = body?.action
@@ -85,10 +90,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(_request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const delivery = await db.delivery.findUnique({ where: { id } })
     if (!delivery) throw new HttpError(404, 'Entrega não encontrada')

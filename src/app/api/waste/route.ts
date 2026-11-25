@@ -1,5 +1,7 @@
 // GET /api/waste — registros de desperdício | POST — registra perda com baixa de estoque
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,8 +41,11 @@ interface WasteBody {
   notes?: string
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'production.view')
+    if (!g.ok) return g.response
+
     const url = new URL(request.url)
     const limitRaw = Number(url.searchParams.get('limit') ?? '200')
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 500) : 200
@@ -51,8 +56,11 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'production.losses')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as WasteBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

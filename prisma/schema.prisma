@@ -412,6 +412,165 @@ model Booking {
   updatedAt    DateTime  @updatedAt
 }
 
+// ============ ACESSOS / AUTENTICAÇÃO / PERMISSÕES (Fase 3) ============
+
+// Empresas (multi-tenant) e unidades (filiais)
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  legalName String?
+  cnpj      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  branches    Branch[]
+  memberships UserMembership[]
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  address   String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accesses  UserBranchAccess[]
+}
+
+// Perfis de acesso (modelos reutilizáveis de permissões)
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique // código interno, ex: PROPRIETARIO
+  description String?
+  isSystem    Boolean  @default(false) // perfil de sistema (não pode excluir)
+  isAbsolute  Boolean  @default(false) // Proprietário: privilégios absolutos
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  permissions RolePermission[]
+  users       User[]
+}
+
+model RolePermission {
+  id            String @id @default(cuid())
+  roleId        String
+  permissionKey String // chave estável do catálogo, ex: sales.cancel
+  role          Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionKey])
+}
+
+// Usuários individuais (e-mail = identificador de login)
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String
+  phone              String?
+  status             String    @default("ACTIVE") // ACTIVE | INACTIVE | BLOCKED
+  mustChangePassword Boolean   @default(false)
+  roleId             String
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  role               Role      @relation(fields: [roleId], references: [id])
+  credential         Credential?
+  sessions           Session[]
+  overrides          UserPermissionOverride[]
+  memberships        UserMembership[]
+  branchAccess       UserBranchAccess[]
+  resetTokens        PasswordResetToken[]
+}
+
+// Credenciais (hash Argon2id - nunca texto puro)
+model Credential {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  passwordHash String
+  algorithm    String   @default("ARGON2ID")
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Sessões ativas (token opaco; apenas o hash é armazenado)
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  ip         String?
+  userAgent  String?
+  active     Boolean   @default(true)
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Vínculo usuário ↔ empresa
+model UserMembership {
+  id        String  @id @default(cuid())
+  userId    String
+  companyId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+}
+
+// Vínculo usuário ↔ unidade autorizada
+model UserBranchAccess {
+  id       String @id @default(cuid())
+  userId   String
+  branchId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId])
+}
+
+// Personalizações individuais (overrides sobre o perfil)
+// granted=true => permissão extra; granted=false => restrição (prevalece sobre o perfil)
+model UserPermissionOverride {
+  id            String    @id @default(cuid())
+  userId        String
+  permissionKey String
+  granted       Boolean
+  origin        String    @default("INDIVIDUAL") // INDIVIDUAL | TEMPORARY
+  grantedBy     String?
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionKey])
+}
+
+// Tokens de recuperação de senha (validade curta + uso único)
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Auditoria de acessos e operações administrativas
+model AccessLog {
+  id        String   @id @default(cuid())
+  actor     String?  // nome do responsável
+  userId    String?
+  userEmail String?
+  action    String   // LOGIN_OK | LOGIN_FAILED | LOGOUT | ...
+  result    String   @default("SUCCESS") // SUCCESS | FAILURE
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+}
+
 // ============ QUALIDADE / DESPERDÍCIO ============
 
 model WasteRecord {

@@ -1,5 +1,7 @@
 // GET /api/suppliers — fornecedores ordenados por nome | POST — criação
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,8 +22,11 @@ interface SupplierBody {
   items?: string
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'purchases.view')
+    if (!g.ok) return g.response
+
     const suppliers = await db.supplier.findMany({ orderBy: { name: 'asc' } })
     return Response.json(suppliers)
   } catch (error) {
@@ -29,8 +34,11 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'purchases.suppliers')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as SupplierBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

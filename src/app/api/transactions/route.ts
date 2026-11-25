@@ -1,5 +1,7 @@
 // GET /api/transactions — fluxo financeiro | POST — lançamento manual
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,8 +34,11 @@ interface TransactionBody {
 }
 
 // GET: query type ('RECEITA' | 'DESPESA') | limit (default 100) — ordenado por date desc
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'finance.cashflow')
+    if (!g.ok) return g.response
+
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Math.max(Math.trunc(num(searchParams.get('limit')) ?? 100), 1), 500)
     const type = searchParams.get('type')
@@ -53,8 +58,11 @@ export async function GET(request: Request) {
 }
 
 // POST: { type: 'RECEITA' | 'DESPESA', category?, description, amount > 0, date? }
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'finance.cashflow')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as TransactionBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

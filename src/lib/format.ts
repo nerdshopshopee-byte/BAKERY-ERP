@@ -65,10 +65,12 @@ export const ORDER_SOURCE_LABELS: Record<string, string> = {
 
 export const ROLE_LABELS: Record<string, string> = {
   PROPRIETARIO: 'Proprietário',
+  ADMINISTRADOR: 'Administrador',
   GERENTE: 'Gerente',
   CAIXA: 'Caixa',
   PADEIRO: 'Padeiro',
   ATENDENTE: 'Atendente',
   FINANCEIRO: 'Financeiro',
   ESTOQUISTA: 'Estoquista',
+  ENTREGADOR: 'Entregador',
 }

@@ -1,5 +1,7 @@
 // GET /api/deliveries — entregas (opcional ?status=) | POST — nova entrega
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,8 +44,11 @@ interface DeliveryBody {
   orderId?: string
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const url = new URL(request.url)
     const status = url.searchParams.get('status')
     const deliveries = await db.delivery.findMany({
@@ -56,8 +61,11 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as DeliveryBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

@@ -1,6 +1,8 @@
 // GET /api/reports/summary?days=30 — inteligência do negócio: DRE, vendas por categoria,
 // top produtos, formas de pagamento, desperdício por motivo e produção planejada x realizada.
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,8 +13,11 @@ function toErrorResponse(error: unknown): Response {
   return Response.json({ error: 'Erro interno do servidor' }, { status: 500 })
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'reports.view')
+    if (!g.ok) return g.response
+
     const url = new URL(request.url)
     const daysRaw = Number(url.searchParams.get('days') ?? '30')
     const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(Math.floor(daysRaw), 365) : 30

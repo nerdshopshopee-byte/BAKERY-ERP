@@ -1,5 +1,7 @@
 // POST /api/employees/[id]/punch — bater ponto (entrada/saída)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,10 +11,13 @@ function toErrorResponse(error: unknown): Response {
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'employees.timelog')
+    if (!g.ok) return g.response
+
     const { id } = await params
 
     const employee = await db.employee.findUnique({ where: { id } })

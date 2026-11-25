@@ -1,5 +1,7 @@
 // PATCH /api/orders/[id] — transições de status do pedido (fluxo KDS)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,12 +26,17 @@ interface StatusBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
     const body = (await request.json().catch(() => null)) as StatusBody | null
+
+    // Permissão depende do corpo: transição de status -> orders.status; demais -> orders.edit
+    const g = await guardApi(request, body?.status ? 'orders.status' : 'orders.edit')
+    if (!g.ok) return g.response
+
     const status = body?.status
     if (!status || typeof status !== 'string' || !VALID_STATUSES.includes(status)) {
       return Response.json({ error: 'Status inválido' }, { status: 400 })

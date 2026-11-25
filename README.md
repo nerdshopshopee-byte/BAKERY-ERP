@@ -29,14 +29,35 @@ ERP completo para padarias: do pão saindo do forno ao fechamento do caixa, do P
 | **Equipe** | Funcionários com cargos (7 perfis), salários, registro de ponto (entrada/saída) e permissões por perfil |
 | **Mercado Pago** | Cobrança PIX (BR Code copia-e-cola), taxas/valor líquido, confirmação via webhook e conciliação — modo demonstração com o mesmo payload da API oficial |
 
-## Perfis de acesso
+## Autenticação e permissões (Fase 3)
 
-Proprietário (total), Gerente, Caixa (PDV/caixa/clientes/encomendas/delivery), Padeiro (KDS/produção/qualidade/estoque/encomendas), Atendente (PDV/KDS/encomendas/delivery/clientes), Financeiro (dashboard/financeiro/relatórios/MP/compras), Estoquista (estoque/compras/catálogo/produção/qualidade).
+Login individual por funcionário (e-mail + senha) com hash **Argon2id** (64 MiB), sessão única por usuário (cookie httpOnly com token opaco — o banco guarda apenas o SHA-256) e revogação imediata em bloqueios, resets e alterações de senha.
+
+- **Catálogo centralizado de permissões** — 62 chaves estáveis (`sales.cancel`, `finance.payables.manage`, `inventory.costs`, `settings.users`...) em 12 módulos, fonte única usada pelo guard das APIs e pelo menu do frontend.
+- **Dois níveis de acesso** — modelos de perfil reutilizáveis (Proprietário absoluto, Administrador, Gerente, Atendente, Padeiro, Estoquista, Financeiro, Entregador) + personalização individual por usuário (concessão extra, restrição que vence o perfil e **concessão temporária com validade**).
+- **Segurança no backend, não no menu** — todos os ~50 endpoints exigem sessão e permissão específica (`guardApi`/`guardApiAny`); quem não tem `finance.view` não lê financeiro nem digitando a URL nem chamando a API. Custos de produtos são zerados na resposta para quem não tem `inventory.costs`. Negos são registrados na auditoria (`API_DENIED`).
+- **Central de administração** (Configurações → Usuários e Permissões): usuários com busca/filtros/situação (Ativo/Inativo/Bloqueado), matriz granular com indicador parcial, marcar/desmarcar tudo por módulo, copiar permissões de outro usuário, aplicar permissões do perfil, redefinição de senha, encerramento de sessões; perfis editáveis com matriz própria; aba de auditoria (logins, falhas, alterações de permissão, bloqueios, negações de API).
+- **Menu dinâmico** montado a partir das permissões efetivas, recarregadas ao focar a janela e a cada alteração administrativa; tela de acesso restrito sem vazamento de dados.
+- **Multi-tenant (fundação)**: empresas + unidades autorizadas por usuário (`Company`, `Branch`, `UserMembership`, `UserBranchAccess`).
+
+## Contas de demonstração
+
+| E-mail | Senha | Perfil |
+|--------|-------|--------|
+| owner@bakeryerp.com.br | bakery2026 | Proprietário — acesso total |
+| gerente@bakeryerp.com.br | padaria123 | Gerente — gestão operacional |
+| joao@padaria.com.br | padaria123 | Atendente personalizado (extra `sales.revenue`, restrição `orders.create`, `sales.cancel` temporário) |
+| padeiro@bakeryerp.com.br | padaria123 | Padeiro — produção |
+| estoquista@bakeryerp.com.br | padaria123 | Estoquista — estoque e compras |
+| financeiro@bakeryerp.com.br | padaria123 | Financeiro — financeiro e relatórios |
+| entregador@bakeryerp.com.br | padaria123 | Entregador — delivery |
+| bloqueado@bakeryerp.com.br | padaria123 | Bloqueado (teste de segurança) |
 
 ## Stack
 
-- **Next.js 16 (App Router) + TypeScript** — 46 route handlers de API
-- **Prisma + SQLite** — 29 modelos (vendas, pedidos, encomendas, delivery, produção, estoque, financeiro, pagamentos, auditoria)
+- **Next.js 16 (App Router) + TypeScript** — ~50 route handlers de API protegidos por guard de permissões
+- **Prisma + SQLite** — 41 modelos (vendas, pedidos, encomendas, delivery, produção, estoque, financeiro, pagamentos, auditoria, usuários/sessões/permissões/multi-tenant)
+- **Argon2id** (@noble/hashes) — hash de senhas com verificação em tempo constant
 - **Tailwind CSS 4 + shadcn/ui (New York)** — tema "Horno": grafite quente + âmbar
 - **Recharts** — gráficos com dados reais
 - **Sonner** — notificações | **Lucide** — ícones | **Framer Motion** — transições
@@ -67,17 +88,20 @@ O módulo de pagamentos roda em modo demonstração (cobranças PIX simuladas lo
 ```
 src/
 ├── app/
-│   ├── api/            # 46 endpoints REST (dashboard, sales, orders, bookings, deliveries, waste, reports...)
+│   ├── api/            # ~50 endpoints REST protegidos por guard (auth, users, roles, audit + operação)
 │   └── page.tsx        # shell único do ERP
 ├── components/
 │   ├── erp/
-│   │   ├── shell.tsx   # login por perfil + navegação + footer
-│   │   └── views/      # 16 módulos (Dashboard, Pdv, Orders, Bookings, Delivery, Quality, Reports...)
+│   │   ├── shell.tsx            # login e-mail/senha + sessão + menu dinâmico + acesso restrito
+│   │   ├── permission-matrix.tsx # editor granular de permissões (usuários e perfis)
+│   │   └── views/               # 17 módulos (Dashboard, Pdv, Orders, ..., UsersView admin)
 │   └── ui/             # shadcn/ui
-└── lib/                # db (Prisma), types (DTOs), api client, format, store (zustand)
+└── lib/
+    ├── auth/           # permissions (catálogo), password (Argon2id), session, effective, guard, audit, default-roles
+    └── ...             # db (Prisma), types (DTOs), api client, format, store (zustand)
 prisma/
-├── schema.prisma       # 29 modelos
-└── seed.ts             # padaria completa de demonstração
+├── schema.prisma       # 41 modelos
+└── seed.ts             # padaria completa + empresa/unidades/perfis/usuários demo
 ```
 
 ---

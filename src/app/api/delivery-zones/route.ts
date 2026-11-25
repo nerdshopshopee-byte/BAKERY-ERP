@@ -1,5 +1,7 @@
 // GET /api/delivery-zones — zonas/bairros com taxa | POST — criação de zona
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,8 +24,11 @@ function numField(value: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const zones = await db.deliveryZone.findMany({ orderBy: { name: 'asc' } })
     return Response.json(zones)
   } catch (error) {
@@ -31,8 +36,11 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as ZoneBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

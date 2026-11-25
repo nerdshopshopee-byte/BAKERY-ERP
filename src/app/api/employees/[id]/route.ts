@@ -1,5 +1,7 @@
 // PATCH /api/employees/[id] — atualização | DELETE — só sem registros de ponto
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,10 +34,13 @@ interface EmployeePatchBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'employees.manage')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as EmployeePatchBody | null
     if (!body || typeof body !== 'object') {
@@ -91,10 +96,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'employees.manage')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const existing = await db.employee.findUnique({ where: { id } })
     if (!existing) {

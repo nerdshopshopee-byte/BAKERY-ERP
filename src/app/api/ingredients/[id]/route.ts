@@ -2,7 +2,9 @@
 // PATCH  /api/ingredients/[id] -> atualiza campos enviados
 // DELETE /api/ingredients/[id] -> bloqueia exclusão se houver StockMovement/RecipeItem/PurchaseItem
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -34,7 +36,10 @@ type IngredientUpdate = {
   supplierId?: string | null
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const g = await guardApi(request, 'inventory.ingredients')
+  if (!g.ok) return g.response
+
   const { id } = await params
 
   const existing = await db.ingredient.findUnique({ where: { id } })
@@ -98,9 +103,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const g = await guardApi(_request, 'inventory.ingredients')
+  if (!g.ok) return g.response
+
   const { id } = await params
 
   const existing = await db.ingredient.findUnique({ where: { id } })

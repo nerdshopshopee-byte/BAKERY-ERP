@@ -27,6 +27,19 @@ const round2 = (v: number) => Math.round(v * 100) / 100
 
 async function main() {
   console.log('Limpando banco...')
+  // Fase 3: acessos, autenticação e permissões
+  await db.accessLog.deleteMany()
+  await db.passwordResetToken.deleteMany()
+  await db.session.deleteMany()
+  await db.credential.deleteMany()
+  await db.userPermissionOverride.deleteMany()
+  await db.userBranchAccess.deleteMany()
+  await db.userMembership.deleteMany()
+  await db.user.deleteMany()
+  await db.rolePermission.deleteMany()
+  await db.role.deleteMany()
+  await db.branch.deleteMany()
+  await db.company.deleteMany()
   await db.auditLog.deleteMany()
   await db.alert.deleteMany()
   await db.wasteRecord.deleteMany()
@@ -677,6 +690,153 @@ async function main() {
       createdAt: daysAgo(1, 12),
       paidAt: daysAgo(1, 12),
     },
+  })
+
+  // ---------- EMPRESA / UNIDADES / PERFIS / USUÁRIOS (Fase 3) ----------
+  console.log('Criando empresa, unidades, perfis e usuários...')
+  const { hashPassword } = await import('../src/lib/auth/password')
+  const { DEFAULT_ROLES } = await import('../src/lib/auth/default-roles')
+
+  const company = await db.company.create({
+    data: { name: 'Padaria Pão Dourado', legalName: 'Pão Dourado Panificadora LTDA', cnpj: '12.345.678/0001-90' },
+  })
+
+  const branchCentro = await db.branch.create({
+    data: { companyId: company.id, name: 'Unidade Centro', address: 'Rua das Flores, 120 - Centro', phone: '(11) 3333-1200' },
+  })
+  const branchJardim = await db.branch.create({
+    data: { companyId: company.id, name: 'Unidade Jardim América', address: 'Av. Brasil, 1450 - Jardim América', phone: '(11) 3333-1450' },
+  })
+
+  const roles = new Map<string, string>()
+  for (const def of DEFAULT_ROLES) {
+    const role = await db.role.create({
+      data: {
+        name: def.name,
+        description: def.description,
+        isSystem: def.isSystem,
+        isAbsolute: def.isAbsolute,
+        permissions: { create: def.permissionKeys.map((permissionKey) => ({ permissionKey })) },
+      },
+    })
+    roles.set(def.name, role.id)
+  }
+
+  const grantBranches = async (userId: string, branchIds: string[]) => {
+    await db.userBranchAccess.createMany({ data: branchIds.map((branchId) => ({ userId, branchId })) })
+    await db.userMembership.create({ data: { userId, companyId: company.id } })
+  }
+
+  const owner = await db.user.create({
+    data: {
+      name: 'Ricardo Alves',
+      email: 'owner@bakeryerp.com.br',
+      phone: '(11) 98888-0001',
+      status: 'ACTIVE',
+      roleId: roles.get('PROPRIETARIO')!,
+      credential: { create: { passwordHash: hashPassword('bakery2026'), algorithm: 'ARGON2ID' } },
+    },
+  })
+  await grantBranches(owner.id, [branchCentro.id, branchJardim.id])
+
+  const gerente = await db.user.create({
+    data: {
+      name: 'Marcia Souza',
+      email: 'gerente@bakeryerp.com.br',
+      phone: '(11) 98888-0002',
+      status: 'ACTIVE',
+      roleId: roles.get('GERENTE')!,
+      credential: { create: { passwordHash: hashPassword('padaria123'), algorithm: 'ARGON2ID' } },
+    },
+  })
+  await grantBranches(gerente.id, [branchCentro.id, branchJardim.id])
+
+  // João (exemplo do requisito): Atendente personalizado
+  // - concessão extra individual: sales.revenue (consultar faturamento)
+  // - restrição individual: orders.create removido
+  // - concessão temporária: sales.cancel válida até o fim da semana
+  const joao = await db.user.create({
+    data: {
+      name: 'João da Silva',
+      email: 'joao@padaria.com.br',
+      phone: '(11) 98888-0003',
+      status: 'ACTIVE',
+      roleId: roles.get('ATENDENTE')!,
+      credential: { create: { passwordHash: hashPassword('padaria123'), algorithm: 'ARGON2ID' } },
+    },
+  })
+  await grantBranches(joao.id, [branchCentro.id])
+  await db.userPermissionOverride.createMany({
+    data: [
+      { userId: joao.id, permissionKey: 'sales.revenue', granted: true, origin: 'INDIVIDUAL', grantedBy: 'Ricardo Alves' },
+      { userId: joao.id, permissionKey: 'orders.create', granted: false, origin: 'INDIVIDUAL', grantedBy: 'Ricardo Alves' },
+      { userId: joao.id, permissionKey: 'sales.cancel', granted: true, origin: 'TEMPORARY', grantedBy: 'Ricardo Alves', expiresAt: new Date(now.getTime() + 7 * DAY) },
+    ],
+  })
+
+  const padeiro = await db.user.create({
+    data: {
+      name: 'Pedro Rocha',
+      email: 'padeiro@bakeryerp.com.br',
+      status: 'ACTIVE',
+      roleId: roles.get('PADEIRO')!,
+      credential: { create: { passwordHash: hashPassword('padaria123'), algorithm: 'ARGON2ID' } },
+    },
+  })
+  await grantBranches(padeiro.id, [branchCentro.id])
+
+  const estoquista = await db.user.create({
+    data: {
+      name: 'Ana Lima',
+      email: 'estoquista@bakeryerp.com.br',
+      status: 'ACTIVE',
+      roleId: roles.get('ESTOQUISTA')!,
+      credential: { create: { passwordHash: hashPassword('padaria123'), algorithm: 'ARGON2ID' } },
+    },
+  })
+  await grantBranches(estoquista.id, [branchCentro.id, branchJardim.id])
+
+  const financeiro = await db.user.create({
+    data: {
+      name: 'Bruno Dias',
+      email: 'financeiro@bakeryerp.com.br',
+      status: 'ACTIVE',
+      roleId: roles.get('FINANCEIRO')!,
+      credential: { create: { passwordHash: hashPassword('padaria123'), algorithm: 'ARGON2ID' } },
+    },
+  })
+  await grantBranches(financeiro.id, [branchCentro.id])
+
+  const entregador = await db.user.create({
+    data: {
+      name: 'Tiago Melo',
+      email: 'entregador@bakeryerp.com.br',
+      status: 'ACTIVE',
+      roleId: roles.get('ENTREGADOR')!,
+      credential: { create: { passwordHash: hashPassword('padaria123'), algorithm: 'ARGON2ID' } },
+    },
+  })
+  await grantBranches(entregador.id, [branchCentro.id])
+
+  // Usuário bloqueado para teste de segurança
+  await db.user.create({
+    data: {
+      name: 'Deusimar Costa',
+      email: 'bloqueado@bakeryerp.com.br',
+      status: 'BLOCKED',
+      roleId: roles.get('ATENDENTE')!,
+      credential: { create: { passwordHash: hashPassword('padaria123'), algorithm: 'ARGON2ID' } },
+    },
+  })
+
+  await db.accessLog.createMany({
+    data: [
+      { action: 'LOGIN_OK', actor: 'Ricardo Alves', userId: owner.id, userEmail: owner.email, detail: 'Perfil: PROPRIETARIO', ip: '192.168.0.10', createdAt: daysAgo(1, 7) },
+      { action: 'LOGIN_OK', actor: 'João da Silva', userId: joao.id, userEmail: joao.email, detail: 'Perfil: ATENDENTE · 3 personalização(ões)', ip: '192.168.0.22', createdAt: daysAgo(1, 8) },
+      { action: 'LOGIN_FAILED', actor: 'Deusimar Costa', userEmail: 'bloqueado@bakeryerp.com.br', result: 'FAILURE', detail: 'Usuário bloqueado', ip: '192.168.0.35', createdAt: daysAgo(1, 9) },
+      { action: 'PERMISSIONS_UPDATED', actor: 'Ricardo Alves', userId: joao.id, userEmail: joao.email, detail: 'Perfil: ATENDENTE · 2 concessões · 1 restrições', ip: '192.168.0.10', createdAt: daysAgo(2, 15) },
+      { action: 'USER_CREATED', actor: 'Ricardo Alves', userId: entregador.id, userEmail: entregador.email, detail: 'Usuário criado com perfil ENTREGADOR · status ACTIVE', ip: '192.168.0.10', createdAt: daysAgo(2, 11) },
+    ],
   })
 
   // ---------- ALERTAS ----------

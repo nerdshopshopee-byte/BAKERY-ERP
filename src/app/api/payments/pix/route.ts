@@ -1,6 +1,8 @@
 // POST /api/payments/pix — gera cobrança PIX simulada (payload no formato Mercado Pago)
 import { randomUUID } from 'crypto'
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,8 +34,11 @@ interface PixBody {
   orderId?: string
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'sales.create')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as PixBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

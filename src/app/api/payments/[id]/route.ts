@@ -1,5 +1,7 @@
 // PATCH /api/payments/[id] — ações: 'confirm' | 'cancel'
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,10 +34,13 @@ function computeFee(method: string, amount: number): number {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'finance.payments')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as PaymentActionBody | null
     if (body?.action !== 'confirm' && body?.action !== 'cancel') {

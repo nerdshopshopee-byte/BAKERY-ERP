@@ -1,5 +1,7 @@
 // PATCH /api/suppliers/[id] — atualização parcial | DELETE — exclusão (soft se houver compras)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,10 +24,13 @@ interface SupplierPatchBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'purchases.suppliers')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as SupplierPatchBody | null
     if (!body || typeof body !== 'object') {
@@ -71,10 +76,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'purchases.suppliers')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const existing = await db.supplier.findUnique({ where: { id } })
     if (!existing) {

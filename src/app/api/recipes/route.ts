@@ -2,7 +2,9 @@
 // GET  /api/recipes -> lista com items enriquecidos e custos computados (totalCost, costPerUnit)
 // POST /api/recipes -> cria receita com items (create aninhado de RecipeItem)
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -23,7 +25,10 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const g = await guardApi(request, 'production.recipes.view')
+  if (!g.ok) return g.response
+
   const [recipes, ingredients] = await Promise.all([
     db.recipe.findMany({ include: { items: true }, orderBy: { name: 'asc' } }),
     db.ingredient.findMany(),
@@ -57,7 +62,10 @@ export async function GET() {
   return Response.json(result)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const g = await guardApi(request, 'production.recipes.edit')
+  if (!g.ok) return g.response
+
   const body = await readBody(request)
 
   const name = str(body.name)

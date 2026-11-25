@@ -1,5 +1,7 @@
 // GET /api/customers — busca por nome/telefone (em JS) | POST — criação
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,8 +23,11 @@ interface CustomerBody {
 }
 
 // GET: query q (ou search) filtra por nome/telefone, case-insensitive
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'customers.view')
+    if (!g.ok) return g.response
+
     const { searchParams } = new URL(request.url)
     const query = (searchParams.get('q') ?? searchParams.get('search') ?? '')
       .trim()
@@ -45,8 +50,11 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'customers.manage')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as CustomerBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

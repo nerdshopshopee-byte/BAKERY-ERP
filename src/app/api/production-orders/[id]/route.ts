@@ -5,7 +5,9 @@
 //             e registra movimentações (insumos negativos + produto produzido)
 // - cancel:   PLANEJADA/EM_ANDAMENTO -> CANCELADA
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -33,7 +35,10 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const g = await guardApi(request, 'production.orders.execute')
+  if (!g.ok) return g.response
+
   const { id } = await params
 
   const order = await db.productionOrder.findUnique({ where: { id } })

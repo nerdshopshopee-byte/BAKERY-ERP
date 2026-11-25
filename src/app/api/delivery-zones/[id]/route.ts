@@ -1,5 +1,7 @@
 // PATCH /api/delivery-zones/[id] — editar taxa/ativo | DELETE — remove zona
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,10 +38,13 @@ interface ZonePatchBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as ZonePatchBody | null
     if (!body || typeof body !== 'object') {
@@ -70,10 +75,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(_request, 'orders.delivery')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const zone = await db.deliveryZone.findUnique({ where: { id } })
     if (!zone) throw new HttpError(404, 'Região não encontrada')

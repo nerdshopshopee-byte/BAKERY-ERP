@@ -2,7 +2,9 @@
 // PATCH  /api/recipes/[id] -> atualiza name/notes/laborCost/yieldQty/unit
 // DELETE /api/recipes/[id] -> deleta receita e seus items
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -31,7 +33,10 @@ type RecipeUpdate = {
   unit?: string
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const g = await guardApi(request, 'production.recipes.edit')
+  if (!g.ok) return g.response
+
   const { id } = await params
 
   const existing = await db.recipe.findUnique({ where: { id } })
@@ -81,9 +86,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const g = await guardApi(_request, 'production.recipes.edit')
+  if (!g.ok) return g.response
+
   const { id } = await params
 
   const existing = await db.recipe.findUnique({ where: { id } })

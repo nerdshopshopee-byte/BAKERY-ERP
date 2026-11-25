@@ -2,7 +2,9 @@
 // GET  /api/categories -> lista ordenada por sortOrder, com productCount de produtos ativos
 // POST /api/categories -> cria categoria { name, imageUrl?, emoji?, sortOrder? }
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -21,7 +23,10 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const g = await guardApi(request)
+  if (!g.ok) return g.response
+
   const [categories, counts] = await Promise.all([
     db.category.findMany({ orderBy: { sortOrder: 'asc' } }),
     db.product.groupBy({
@@ -44,7 +49,10 @@ export async function GET() {
   return Response.json(result)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const g = await guardApi(request, 'inventory.products')
+  if (!g.ok) return g.response
+
   const body = await readBody(request)
 
   const name = str(body.name)

@@ -1,5 +1,7 @@
 // GET /api/employees — funcionários | POST — criação
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,8 +32,11 @@ interface EmployeeBody {
   phone?: string
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'employees.view')
+    if (!g.ok) return g.response
+
     const employees = await db.employee.findMany({ orderBy: { name: 'asc' } })
     return Response.json(employees)
   } catch (error) {
@@ -39,8 +44,11 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'employees.manage')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as EmployeeBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

@@ -2,7 +2,9 @@
 // GET  /api/ingredients -> lista ordenada por nome, com supplierName
 // POST /api/ingredients -> cria insumo { name, unit, costPerUnit, stock, minStock, supplierId? }
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -30,7 +32,10 @@ function num(value: unknown, fallback: number): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const g = await guardApi(request, 'inventory.view')
+  if (!g.ok) return g.response
+
   const [ingredients, suppliers] = await Promise.all([
     db.ingredient.findMany({ orderBy: { name: 'asc' } }),
     db.supplier.findMany(),
@@ -48,7 +53,10 @@ export async function GET() {
   return Response.json(enriched)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const g = await guardApi(request, 'inventory.ingredients')
+  if (!g.ok) return g.response
+
   const body = await readBody(request)
 
   const name = str(body.name)

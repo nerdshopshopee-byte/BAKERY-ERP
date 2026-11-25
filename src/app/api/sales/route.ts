@@ -1,5 +1,7 @@
 // GET /api/sales — listagem de vendas | POST /api/sales — checkout do PDV
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,8 +54,11 @@ interface CheckoutBody {
 }
 
 // GET: query limit (default 50), from, to (ISO)
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'sales.history')
+    if (!g.ok) return g.response
+
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Math.max(Math.trunc(num(searchParams.get('limit')) ?? 50), 1), 500)
 
@@ -82,8 +87,11 @@ export async function GET(request: Request) {
 }
 
 // POST: checkout do PDV
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const g = await guardApi(request, 'sales.create')
+    if (!g.ok) return g.response
+
     const body = (await request.json().catch(() => null)) as CheckoutBody | null
     if (!body || typeof body !== 'object') {
       return Response.json({ error: 'Corpo da requisição inválido' }, { status: 400 })

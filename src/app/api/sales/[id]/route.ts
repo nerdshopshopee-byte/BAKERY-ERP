@@ -1,5 +1,7 @@
 // PATCH /api/sales/[id] — ações sobre a venda (action: 'cancel')
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,12 +27,16 @@ interface CancelBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
     const body = (await request.json().catch(() => null)) as CancelBody | null
+
+    const g = await guardApi(request, 'sales.cancel')
+    if (!g.ok) return g.response
+
     if (body?.action !== 'cancel') {
       return Response.json({ error: 'Ação inválida' }, { status: 400 })
     }

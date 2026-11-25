@@ -1,5 +1,7 @@
 // PATCH /api/bookings/[id] — atualiza status/sinal/dados | DELETE — remove encomenda
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,10 +42,13 @@ interface BookingPatchBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'orders.bookings')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as BookingPatchBody | null
     if (!body || typeof body !== 'object') {
@@ -92,10 +97,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(_request, 'orders.bookings')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const booking = await db.booking.findUnique({ where: { id } })
     if (!booking) throw new HttpError(404, 'Encomenda não encontrada')

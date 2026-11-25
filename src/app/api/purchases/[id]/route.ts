@@ -1,5 +1,7 @@
 // PATCH /api/purchases/[id] — ações: 'receive' (receber) | 'cancel' (cancelar)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,12 +29,20 @@ interface PurchaseActionBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
     const body = (await request.json().catch(() => null)) as PurchaseActionBody | null
+
+    // Permissão depende da ação: receive -> purchases.receive; cancel -> purchases.cancel
+    const g = await guardApi(
+      request,
+      body?.action === 'receive' ? 'purchases.receive' : 'purchases.cancel'
+    )
+    if (!g.ok) return g.response
+
     if (body?.action !== 'receive' && body?.action !== 'cancel') {
       return Response.json({ error: 'Ação inválida' }, { status: 400 })
     }

@@ -2,7 +2,9 @@
 // GET  /api/stock/movements?itemType=&ingredientId=&productId=&limit= (default 100)
 // POST /api/stock/movements -> registra movimento e aplica saldo em insumos
 
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -26,7 +28,10 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const g = await guardApi(request, 'inventory.view')
+  if (!g.ok) return g.response
+
   const { searchParams } = new URL(request.url)
   const itemType = (searchParams.get('itemType') ?? '').trim()
   const ingredientId = (searchParams.get('ingredientId') ?? '').trim()
@@ -76,8 +81,19 @@ export async function GET(request: Request) {
   return Response.json(enriched)
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const body = await readBody(request)
+
+  // Permissão depende do tipo de movimento enviado no corpo
+  const requestedType = typeof body.type === 'string' ? body.type : ''
+  const permission =
+    requestedType === 'ENTRADA'
+      ? 'inventory.entries'
+      : requestedType === 'SAIDA'
+        ? 'inventory.exits'
+        : 'inventory.adjust'
+  const g = await guardApi(request, permission)
+  if (!g.ok) return g.response
 
   const itemType = typeof body.itemType === 'string' ? body.itemType : ''
   if (!(ITEM_TYPES as readonly string[]).includes(itemType)) {

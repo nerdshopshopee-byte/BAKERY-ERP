@@ -1,5 +1,7 @@
 // GET /api/dashboard — métricas consolidadas do ERP (DashboardDTO)
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +11,10 @@ const round1 = (value: number) => Math.round(value * 10) / 10
 const dayLabel = (date: Date) =>
   `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const g = await guardApi(request, 'dashboard.view')
+  if (!g.ok) return g.response
+
   const now = new Date()
 
   const startToday = new Date(now)

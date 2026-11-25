@@ -1,5 +1,7 @@
 // PATCH /api/customers/[id] — atualização | DELETE — bloqueado se houver vendas/recebíveis
+import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { guardApi } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,10 +23,13 @@ interface CustomerPatchBody {
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'customers.manage')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const body = (await request.json().catch(() => null)) as CustomerPatchBody | null
     if (!body || typeof body !== 'object') {
@@ -68,10 +73,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const g = await guardApi(request, 'customers.manage')
+    if (!g.ok) return g.response
+
     const { id } = await params
     const existing = await db.customer.findUnique({ where: { id } })
     if (!existing) {
