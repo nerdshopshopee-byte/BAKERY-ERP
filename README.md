@@ -22,17 +22,21 @@ ERP completo para padarias: do pão saindo do forno ao fechamento do caixa, do P
 | **Caixa** | Abertura/fechamento de sessão, sangria com validação de saldo, suprimento, movimentações em tempo real e conferência com diferença |
 | **Financeiro** | Contas a pagar/receber com vencimentos, fluxo de caixa de 14 dias, DRE simplificada por categoria e lançamentos manuais |
 | **Clientes** | Cadastro com fidelidade (pontos), saldo fiado integrado às vendas e aniversários |
+| **Encomendas** | Bolos personalizados, festas e salgados com ficha de produção, sinal (40% sugerido), saldo a receber e fluxo Orçamento → Confirmada → Em produção → Pronta → Retirada |
+| **Delivery** | Entregadores (veículo/ativação), taxas por região aplicadas automaticamente, controle de entregas (Pendente → Em rota → Entregue/Falhou) e KPIs do dia |
+| **Qualidade e Desperdício** | Registro de perdas por produto/insumo com motivo (vencido, queimado, erro de produção, devolução), custo calculado no servidor, baixa de estoque com movimentação PERDA rastreável e KPIs de 30 dias |
+| **Relatórios** | DRE gerencial (receita, CMV, lucro bruto/líquido, margem), vendas por categoria, top produtos, recebimentos por forma de pagamento, aderência de produção e desperdício por motivo — períodos de 7/30/90 dias |
 | **Equipe** | Funcionários com cargos (7 perfis), salários, registro de ponto (entrada/saída) e permissões por perfil |
 | **Mercado Pago** | Cobrança PIX (BR Code copia-e-cola), taxas/valor líquido, confirmação via webhook e conciliação — modo demonstração com o mesmo payload da API oficial |
 
 ## Perfis de acesso
 
-Proprietário (total), Gerente, Caixa (PDV/caixa/clientes), Padeiro (KDS/produção/estoque), Atendente (PDV/KDS/clientes), Financeiro (dashboard/financeiro/MP/compras), Estoquista (estoque/compras/catálogo/produção).
+Proprietário (total), Gerente, Caixa (PDV/caixa/clientes/encomendas/delivery), Padeiro (KDS/produção/qualidade/estoque/encomendas), Atendente (PDV/KDS/encomendas/delivery/clientes), Financeiro (dashboard/financeiro/relatórios/MP/compras), Estoquista (estoque/compras/catálogo/produção/qualidade).
 
 ## Stack
 
-- **Next.js 16 (App Router) + TypeScript** — 36 route handlers de API
-- **Prisma + SQLite** — 24 modelos (vendas, pedidos, produção, estoque, financeiro, pagamentos, auditoria)
+- **Next.js 16 (App Router) + TypeScript** — 46 route handlers de API
+- **Prisma + SQLite** — 29 modelos (vendas, pedidos, encomendas, delivery, produção, estoque, financeiro, pagamentos, auditoria)
 - **Tailwind CSS 4 + shadcn/ui (New York)** — tema "Horno": grafite quente + âmbar
 - **Recharts** — gráficos com dados reais
 - **Sonner** — notificações | **Lucide** — ícones | **Framer Motion** — transições
@@ -63,16 +67,16 @@ O módulo de pagamentos roda em modo demonstração (cobranças PIX simuladas lo
 ```
 src/
 ├── app/
-│   ├── api/            # 36 endpoints REST (dashboard, sales, orders, cash, payments...)
+│   ├── api/            # 46 endpoints REST (dashboard, sales, orders, bookings, deliveries, waste, reports...)
 │   └── page.tsx        # shell único do ERP
 ├── components/
 │   ├── erp/
 │   │   ├── shell.tsx   # login por perfil + navegação + footer
-│   │   └── views/      # 12 módulos (Dashboard, Pdv, Orders, Production...)
+│   │   └── views/      # 16 módulos (Dashboard, Pdv, Orders, Bookings, Delivery, Quality, Reports...)
 │   └── ui/             # shadcn/ui
 └── lib/                # db (Prisma), types (DTOs), api client, format, store (zustand)
 prisma/
-├── schema.prisma       # 24 modelos
+├── schema.prisma       # 29 modelos
 └── seed.ts             # padaria completa de demonstração
 ```
 

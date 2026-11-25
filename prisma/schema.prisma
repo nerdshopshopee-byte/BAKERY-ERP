@@ -352,3 +352,79 @@ model Alert {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+// ============ DELIVERY ============
+
+model Deliverer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  vehicle   String?  // Moto | Bicicleta | Carro
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeliveryZone {
+  id        String   @id @default(cuid())
+  name      String   // bairro / região
+  fee       Float    @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Delivery {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  orderId       String?
+  customerName  String?
+  phone         String?
+  address       String?
+  zoneId        String?
+  zoneName      String?
+  delivererId   String?
+  delivererName String?
+  fee           Float     @default(0)
+  status        String    @default("PENDENTE") // PENDENTE | EM_ROTA | ENTREGUE | FALHOU
+  dispatchedAt  DateTime?
+  deliveredAt   DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============ ENCOMENDAS ============
+
+model Booking {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  customerName String
+  phone        String?
+  kind         String    @default("BOLO") // BOLO | FESTA | SALGADOS | OUTROS
+  description  String
+  serveQty     Float?    // rendimento / nº de pessoas
+  dueDate      DateTime  // data e horário de retirada
+  totalAmount  Float     @default(0)
+  deposit      Float     @default(0) // sinal pago
+  status       String    @default("ORCAMENTO") // ORCAMENTO | CONFIRMADA | EM_PRODUCAO | PRONTA | RETIRADA | CANCELADA
+  notes        String?   // ficha de produção específica
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// ============ QUALIDADE / DESPERDÍCIO ============
+
+model WasteRecord {
+  id           String    @id @default(cuid())
+  itemType     String    @default("PRODUCT") // PRODUCT | INGREDIENT
+  productId    String?
+  ingredientId String?
+  name         String
+  qty          Float     @default(0)
+  unit         String?
+  reason       String    @default("OUTROS") // VENCIDO | QUEIMADO | ERRO_PRODUCAO | DEVOLUCAO | OUTROS
+  cost         Float     @default(0)
+  actor        String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+}

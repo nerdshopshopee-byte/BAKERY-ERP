@@ -29,6 +29,11 @@ async function main() {
   console.log('Limpando banco...')
   await db.auditLog.deleteMany()
   await db.alert.deleteMany()
+  await db.wasteRecord.deleteMany()
+  await db.delivery.deleteMany()
+  await db.deliveryZone.deleteMany()
+  await db.deliverer.deleteMany()
+  await db.booking.deleteMany()
   await db.payment.deleteMany()
   await db.transaction.deleteMany()
   await db.receivable.deleteMany()
@@ -280,7 +285,7 @@ async function main() {
   let saleSeq = 4100
   for (let d = 14; d >= 0; d--) {
     const isToday = d === 0
-    const count = Math.floor(rnd(9, 18))
+    const count = Math.floor(rnd(20, 32))
     for (let s = 0; s < count; s++) {
       saleSeq++
       const code = String(saleSeq)
@@ -290,7 +295,7 @@ async function main() {
       let total = 0
       for (let it = 0; it < itemCount; it++) {
         const p = products[Math.floor(Math.random() * products.length)]
-        const qty = p.byWeight ? round2(rnd(0.5, 2)) : Math.floor(rnd(1, 5))
+        const qty = p.byWeight ? round2(rnd(0.5, 2)) : Math.floor(rnd(2, 9))
         const subtotal = round2(qty * p.price)
         items.push({ productId: p.id, name: p.name, qty, unitPrice: p.price, unit: p.unit, subtotal })
         total += subtotal
@@ -481,8 +486,155 @@ async function main() {
   }
   await db.transaction.create({ data: { type: 'DESPESA', category: 'ALUGUEL', description: 'Aluguel do imóvel', amount: 3800, date: daysAgo(12, 9) } })
   await db.transaction.create({ data: { type: 'DESPESA', category: 'ENERGIA', description: 'Energia elétrica', amount: 1420.75, date: daysAgo(9, 9) } })
-  await db.transaction.create({ data: { type: 'DESPESA', category: 'FOLHA', description: 'Adiantamento de salários', amount: 8200, date: daysAgo(7, 9) } })
+  await db.transaction.create({ data: { type: 'DESPESA', category: 'FOLHA', description: 'Adiantamento de salários', amount: 6400, date: daysAgo(7, 9) } })
   await db.transaction.create({ data: { type: 'RECEITA', category: 'OUTROS', description: 'Festas e eventos (salão)', amount: 1450, date: daysAgo(6, 14) } })
+
+  // ---------- DELIVERY ----------
+  console.log('Gerando dados de delivery...')
+  const deliverers = await Promise.all(
+    [
+      { name: 'Rafael Costa', phone: '(11) 96666-1010', vehicle: 'Moto Honda Biz' },
+      { name: 'Juliana Ferreira', phone: '(11) 96666-2020', vehicle: 'Moto Yamaha Neo' },
+      { name: 'Diego Almeida', phone: '(11) 96666-3030', vehicle: 'Bicicleta elétrica', active: false },
+    ].map((d) => db.deliverer.create({ data: d }))
+  )
+  const zones = await Promise.all(
+    [
+      { name: 'Centro', fee: 0 },
+      { name: 'Jardim Aurora', fee: 5.0 },
+      { name: 'Vila Nova', fee: 7.5 },
+      { name: 'Parque Industrial', fee: 12.0 },
+    ].map((z) => db.deliveryZone.create({ data: z }))
+  )
+  await db.delivery.create({
+    data: {
+      code: 'DEL-1041', customerName: 'Maria Helena Ramos', phone: customers[0].phone,
+      address: 'Rua das Palmeiras, 120', zoneId: zones[1].id, zoneName: zones[1].name,
+      delivererId: deliverers[0].id, delivererName: deliverers[0].name, fee: zones[1].fee,
+      status: 'EM_ROTA', dispatchedAt: new Date(now.getTime() - 25 * 60 * 1000),
+      notes: 'Portão preto - tocar a campainha', createdAt: new Date(now.getTime() - 50 * 60 * 1000),
+    },
+  })
+  await db.delivery.create({
+    data: {
+      code: 'DEL-1040', customerName: 'João Pedro Dias', phone: customers[1].phone,
+      address: 'Av. Brasil, 455', zoneId: zones[0].id, zoneName: zones[0].name,
+      delivererId: deliverers[1].id, delivererName: deliverers[1].name, fee: zones[0].fee,
+      status: 'PENDENTE', notes: 'Cafés e pães para escritório', createdAt: new Date(now.getTime() - 12 * 60 * 1000),
+    },
+  })
+  await db.delivery.create({
+    data: {
+      code: 'DEL-1039', customerName: 'Ana Beatriz Rocha', phone: customers[3].phone,
+      address: 'Rua Ipê, 302', zoneId: zones[2].id, zoneName: zones[2].name,
+      delivererId: deliverers[0].id, delivererName: deliverers[0].name, fee: zones[2].fee,
+      status: 'ENTREGUE', dispatchedAt: daysAgo(0, 9), deliveredAt: daysAgo(0, 9, 40), createdAt: daysAgo(0, 8, 50),
+    },
+  })
+  await db.delivery.create({
+    data: {
+      code: 'DEL-1038', customerName: 'Lanches do Zé', phone: customers[4].phone,
+      address: 'Praça Central, 12', zoneId: zones[2].id, zoneName: zones[2].name,
+      delivererId: deliverers[1].id, delivererName: deliverers[1].name, fee: zones[2].fee,
+      status: 'ENTREGUE', dispatchedAt: daysAgo(1, 17), deliveredAt: daysAgo(1, 17, 35), createdAt: daysAgo(1, 16, 40),
+    },
+  })
+  await db.delivery.create({
+    data: {
+      code: 'DEL-1037', customerName: 'Sofia Martins', phone: customers[5].phone,
+      address: 'Rua Cecília, 88', zoneId: zones[3].id, zoneName: zones[3].name,
+      delivererId: deliverers[0].id, delivererName: deliverers[0].name, fee: zones[3].fee,
+      status: 'FALHOU', notes: 'Cliente ausente', dispatchedAt: daysAgo(1, 11), createdAt: daysAgo(1, 10, 30),
+    },
+  })
+
+  // ---------- ENCOMENDAS ----------
+  console.log('Gerando encomendas...')
+  const due1042 = new Date(now.getTime() + 1 * DAY)
+  due1042.setHours(16, 0, 0, 0)
+  await db.booking.create({
+    data: {
+      code: 'ENC-1042', customerName: 'Maria Helena Ramos', phone: customers[0].phone,
+      kind: 'BOLO', description: 'Bolo de aniversário - chocolate com morangos',
+      serveQty: 25, dueDate: due1042,
+      totalAmount: 240, deposit: 96, status: 'CONFIRMADA',
+      notes: 'Massa de chocolate, recheio de brigadeiro com morangos, cobertura chantilly. Escrever "Feliz 10 anos, Alice!"',
+      createdAt: daysAgo(2, 10),
+    },
+  })
+  await db.booking.create({
+    data: {
+      code: 'ENC-1041', customerName: 'Escola Cantinho Feliz', phone: customers[2].phone,
+      kind: 'SALGADOS', description: '200 salgados variados para festa junina',
+      serveQty: 200, dueDate: new Date(now.getTime() + 3 * DAY),
+      totalAmount: 890, deposit: 300, status: 'EM_PRODUCAO',
+      notes: '50 coxinhas, 50 risoles, 50 kibes, 50 empadas. Entregar em bandejas descartáveis às 14h.',
+      createdAt: daysAgo(4, 9),
+    },
+  })
+  await db.booking.create({
+    data: {
+      code: 'ENC-1040', customerName: 'Ana Beatriz Rocha', phone: customers[3].phone,
+      kind: 'FESTA', description: 'Mesa de doces para chá de bebê - 120 unidades',
+      serveQty: 120, dueDate: new Date(now.getTime() + 6 * DAY),
+      totalAmount: 560, deposit: 0, status: 'ORCAMENTO',
+      notes: 'Brigadeiros, beijinhos, cajuzinhos e trufas. Cores rosa e dourado.',
+      createdAt: daysAgo(1, 15),
+    },
+  })
+  await db.booking.create({
+    data: {
+      code: 'ENC-1039', customerName: 'Sofia Martins', phone: customers[5].phone,
+      kind: 'BOLO', description: 'Torta de limão para reunião de família',
+      serveQty: 12, dueDate: daysAgo(0, 18),
+      totalAmount: 95, deposit: 95, status: 'PRONTA',
+      notes: 'Cobertura de merengue tostado.',
+      createdAt: daysAgo(1, 11),
+    },
+  })
+  await db.booking.create({
+    data: {
+      code: 'ENC-1038', customerName: 'João Pedro Dias', phone: customers[1].phone,
+      kind: 'BOLO', description: 'Bolo de cenoura com chocolate (retirado)',
+      serveQty: 15, dueDate: daysAgo(2, 16),
+      totalAmount: 120, deposit: 60, status: 'RETIRADA',
+      createdAt: daysAgo(5, 9),
+    },
+  })
+
+  // ---------- QUALIDADE / DESPERDÍCIO ----------
+  console.log('Gerando registros de desperdício...')
+  const wasteData: { itemType: 'PRODUCT' | 'INGREDIENT'; itemName: string; productId?: string; ingredientId?: string; qty: number; unit: string; unitCost: number; reason: string; actor: string; notes?: string; created: Date }[] = [
+    { itemType: 'PRODUCT', itemName: 'Pão Francês', productId: prod('Pão Francês'), qty: 28, unit: 'UN', unitCost: 0.31, reason: 'VENCIDO', actor: 'Carlos Nunes', notes: 'Sobras do dia anterior', created: daysAgo(0, 7) },
+    { itemType: 'PRODUCT', itemName: 'Coxinha', productId: prod('Coxinha'), qty: 6, unit: 'UN', unitCost: 1.9, reason: 'QUEIMADO', actor: 'Marcos Padeiro', notes: 'Forno atrasou a temperatura', created: daysAgo(1, 11) },
+    { itemType: 'INGREDIENT', itemName: 'Leite Integral', ingredientId: ing('Leite Integral'), qty: 4, unit: 'L', unitCost: 5.3, reason: 'VENCIDO', actor: 'Ana Estoque', notes: 'Lote vencido no fundo da câmara', created: daysAgo(2, 9) },
+    { itemType: 'PRODUCT', itemName: 'Bolo de Chocolate', productId: prod('Bolo de Chocolate'), qty: 1, unit: 'UN', unitCost: 4.2, reason: 'ERRO_PRODUCAO', actor: 'Dona Cecília', notes: 'Massa não cresceu', created: daysAgo(3, 14) },
+    { itemType: 'PRODUCT', itemName: 'Brownie', productId: prod('Brownie'), qty: 4, unit: 'UN', unitCost: 2.2, reason: 'DEVOLUCAO', actor: 'Carla Atendente', notes: 'Cliente devolveu - embalagem aberta', created: daysAgo(5, 16) },
+    { itemType: 'INGREDIENT', itemName: 'Manteiga sem Sal', ingredientId: ing('Manteiga sem Sal'), qty: 1.5, unit: 'KG', unitCost: 42.0, reason: 'VENCIDO', actor: 'Ana Estoque', created: daysAgo(8, 10) },
+    { itemType: 'PRODUCT', itemName: 'Pão de Queijo', productId: prod('Pão de Queijo'), qty: 12, unit: 'UN', unitCost: 1.4, reason: 'VENCIDO', actor: 'Carlos Nunes', created: daysAgo(12, 7) },
+    { itemType: 'INGREDIENT', itemName: 'Ovos', ingredientId: ing('Ovos'), qty: 12, unit: 'UN', unitCost: 0.72, reason: 'OUTROS', actor: 'Marcos Padeiro', notes: 'Trincados no transporte', created: daysAgo(16, 8) },
+  ]
+  for (const w of wasteData) {
+    const record = await db.wasteRecord.create({
+      data: {
+        itemType: w.itemType, productId: w.productId ?? null, ingredientId: w.ingredientId ?? null,
+        name: w.itemName, qty: w.qty, unit: w.unit, reason: w.reason,
+        cost: round2(w.unitCost * w.qty), actor: w.actor, notes: w.notes ?? null, createdAt: w.created,
+      },
+    })
+    await db.stockMovement.create({
+      data: {
+        itemType: w.itemType, ingredientId: w.ingredientId ?? null, productId: w.productId ?? null,
+        type: 'PERDA', qty: -w.qty, unitCost: w.unitCost, refId: record.id, reason: w.reason, createdAt: w.created,
+      },
+    })
+    if (w.ingredientId) {
+      const ingredient = await db.ingredient.findUnique({ where: { id: w.ingredientId } })
+      if (ingredient) {
+        await db.ingredient.update({ where: { id: w.ingredientId }, data: { stock: round2(Math.max(0, ingredient.stock - w.qty)) } })
+      }
+    }
+  }
 
   // ---------- PAGAMENTOS MERCADO PAGO ----------
   await db.payment.create({

@@ -9,7 +9,10 @@ import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import {
+  Bike,
   Boxes,
+  BarChart3,
+  Cake,
   Calculator,
   ClipboardList,
   CookingPot,
@@ -54,12 +57,16 @@ import type { ViewProps } from './view-props'
 import DashboardView from './views/DashboardView'
 import PdvView from './views/PdvView'
 import OrdersView from './views/OrdersView'
+import BookingsView from './views/BookingsView'
+import DeliveryView from './views/DeliveryView'
 import ProductionView from './views/ProductionView'
 import ProductsView from './views/ProductsView'
+import QualityView from './views/QualityView'
 import StockView from './views/StockView'
 import PurchasesView from './views/PurchasesView'
 import CashView from './views/CashView'
 import FinanceView from './views/FinanceView'
+import ReportsView from './views/ReportsView'
 import EmployeesView from './views/EmployeesView'
 import CustomersView from './views/CustomersView'
 import PaymentsView from './views/PaymentsView'
@@ -74,6 +81,8 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { key: 'pdv', label: 'PDV', icon: ShoppingCart },
       { key: 'orders', label: 'Pedidos', icon: ClipboardList },
+      { key: 'bookings', label: 'Encomendas', icon: Cake },
+      { key: 'delivery', label: 'Delivery', icon: Bike },
     ],
   },
   {
@@ -81,6 +90,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'production', label: 'Produção', icon: CookingPot },
       { key: 'products', label: 'Produtos', icon: Package },
+      { key: 'quality', label: 'Qualidade', icon: ShieldCheck },
       { key: 'stock', label: 'Estoque', icon: Boxes },
     ],
   },
@@ -97,6 +107,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'cash', label: 'Caixa', icon: Wallet },
       { key: 'finance', label: 'Financeiro', icon: Landmark },
       { key: 'payments', label: 'Mercado Pago', icon: QrCode },
+      { key: 'reports', label: 'Relatórios', icon: BarChart3 },
     ],
   },
   {
@@ -109,12 +120,16 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   dashboard: 'Dashboard',
   pdv: 'PDV - Frente de Caixa',
   orders: 'Pedidos (KDS)',
+  bookings: 'Encomendas',
+  delivery: 'Delivery',
   production: 'Produção',
   products: 'Produtos',
+  quality: 'Qualidade e Desperdício',
   stock: 'Estoque',
   purchases: 'Compras',
   cash: 'Caixa',
   finance: 'Financeiro',
+  reports: 'Relatórios',
   employees: 'Equipe',
   customers: 'Clientes',
   payments: 'Mercado Pago',
@@ -124,12 +139,16 @@ const VIEWS: Record<ModuleKey, ComponentType<ViewProps>> = {
   dashboard: DashboardView,
   pdv: PdvView,
   orders: OrdersView,
+  bookings: BookingsView,
+  delivery: DeliveryView,
   production: ProductionView,
   products: ProductsView,
+  quality: QualityView,
   stock: StockView,
   purchases: PurchasesView,
   cash: CashView,
   finance: FinanceView,
+  reports: ReportsView,
   employees: EmployeesView,
   customers: CustomersView,
   payments: PaymentsView,
@@ -228,7 +247,7 @@ function LoginScreen() {
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Fase 1 de produção - ambiente demonstrativo
+          Fase 2 - Atendimento, Qualidade e Inteligência · ambiente demonstrativo
         </p>
       </div>
     </div>

@@ -321,3 +321,95 @@ export type DashboardDTO = {
   alerts: AlertDTO[]
   paymentMethods: { method: string; total: number }[]
 }
+
+// ============ DELIVERY ============
+
+export type DelivererDTO = {
+  id: string
+  name: string
+  phone?: string | null
+  vehicle?: string | null
+  active: boolean
+}
+
+export type DeliveryZoneDTO = {
+  id: string
+  name: string
+  fee: number
+  active: boolean
+}
+
+export type DeliveryDTO = {
+  id: string
+  code: string
+  orderId?: string | null
+  customerName?: string | null
+  phone?: string | null
+  address?: string | null
+  zoneId?: string | null
+  zoneName?: string | null
+  delivererId?: string | null
+  delivererName?: string | null
+  fee: number
+  status: string // PENDENTE | EM_ROTA | ENTREGUE | FALHOU
+  dispatchedAt?: string | null
+  deliveredAt?: string | null
+  notes?: string | null
+  createdAt: string
+}
+
+// ============ ENCOMENDAS ============
+
+export type BookingDTO = {
+  id: string
+  code: string
+  customerName: string
+  phone?: string | null
+  kind: string // BOLO | FESTA | SALGADOS | OUTROS
+  description: string
+  serveQty?: number | null
+  dueDate: string
+  totalAmount: number
+  deposit: number
+  status: string // ORCAMENTO | CONFIRMADA | EM_PRODUCAO | PRONTA | RETIRADA | CANCELADA
+  notes?: string | null
+  createdAt: string
+}
+
+// ============ QUALIDADE / DESPERDÍCIO ============
+
+export type WasteRecordDTO = {
+  id: string
+  itemType: string // PRODUCT | INGREDIENT
+  productId?: string | null
+  ingredientId?: string | null
+  name: string
+  qty: number
+  unit?: string | null
+  reason: string // VENCIDO | QUEIMADO | ERRO_PRODUCAO | DEVOLUCAO | OUTROS
+  cost: number
+  actor?: string | null
+  notes?: string | null
+  createdAt: string
+}
+
+// ============ RELATÓRIOS / INTELIGÊNCIA ============
+
+export type ReportSummaryDTO = {
+  period: { from: string; to: string; days: number }
+  dre: {
+    revenue: number
+    cogs: number
+    grossProfit: number
+    expensesByCategory: { category: string; amount: number }[]
+    totalExpenses: number
+    netProfit: number
+    margin: number
+  }
+  salesByCategory: { category: string; amount: number }[]
+  topProducts: { name: string; qty: number; amount: number }[]
+  salesByMethod: { method: string; amount: number }[]
+  wasteByReason: { reason: string; amount: number; count: number }[]
+  production: { planned: number; done: number; accuracy: number }
+  orders: { total: number; delivered: number; avgMinutes: number | null }
+}

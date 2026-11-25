@@ -25,22 +25,26 @@ export type ModuleKey =
   | 'dashboard'
   | 'pdv'
   | 'orders'
+  | 'bookings'
+  | 'delivery'
   | 'production'
   | 'products'
+  | 'quality'
   | 'stock'
   | 'purchases'
   | 'cash'
   | 'finance'
+  | 'reports'
   | 'employees'
   | 'customers'
   | 'payments'
 
 export const ROLE_MODULES: Record<OperatorRole, ModuleKey[]> = {
-  PROPRIETARIO: ['dashboard', 'pdv', 'orders', 'production', 'products', 'stock', 'purchases', 'cash', 'finance', 'employees', 'customers', 'payments'],
-  GERENTE: ['dashboard', 'pdv', 'orders', 'production', 'products', 'stock', 'purchases', 'cash', 'finance', 'employees', 'customers', 'payments'],
-  CAIXA: ['dashboard', 'pdv', 'orders', 'cash', 'customers'],
-  PADEIRO: ['orders', 'production', 'stock'],
-  ATENDENTE: ['pdv', 'orders', 'customers'],
-  FINANCEIRO: ['dashboard', 'finance', 'payments', 'purchases'],
-  ESTOQUISTA: ['stock', 'purchases', 'products', 'production'],
+  PROPRIETARIO: ['dashboard', 'pdv', 'orders', 'bookings', 'delivery', 'production', 'products', 'quality', 'stock', 'purchases', 'cash', 'finance', 'reports', 'employees', 'customers', 'payments'],
+  GERENTE: ['dashboard', 'pdv', 'orders', 'bookings', 'delivery', 'production', 'products', 'quality', 'stock', 'purchases', 'cash', 'finance', 'reports', 'employees', 'customers', 'payments'],
+  CAIXA: ['dashboard', 'pdv', 'orders', 'bookings', 'delivery', 'cash', 'customers'],
+  PADEIRO: ['orders', 'bookings', 'production', 'quality', 'stock'],
+  ATENDENTE: ['pdv', 'orders', 'bookings', 'delivery', 'customers'],
+  FINANCEIRO: ['dashboard', 'finance', 'reports', 'payments', 'purchases'],
+  ESTOQUISTA: ['stock', 'purchases', 'products', 'production', 'quality'],
 }
