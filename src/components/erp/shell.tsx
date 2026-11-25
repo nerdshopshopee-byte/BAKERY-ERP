@@ -29,6 +29,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  ScrollText,
   Package,
   QrCode,
   ShieldCheck,
@@ -91,6 +92,7 @@ import EmployeesView from './views/EmployeesView'
 import CustomersView from './views/CustomersView'
 import PaymentsView from './views/PaymentsView'
 import UsersView from './views/UsersView'
+import FiscalView from './views/FiscalView'
 
 type NavItem = { key: ModuleKey; label: string; icon: LucideIcon }
 type NavGroup = { label: string; items: NavItem[] }
@@ -128,6 +130,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'cash', label: 'Caixa', icon: Wallet },
       { key: 'finance', label: 'Financeiro', icon: Landmark },
       { key: 'payments', label: 'Mercado Pago', icon: QrCode },
+      { key: 'fiscal', label: 'Fiscal', icon: ScrollText },
       { key: 'reports', label: 'Relatórios', icon: BarChart3 },
     ],
   },
@@ -180,6 +183,7 @@ const VIEWS: Record<ModuleKey, ComponentType<ViewProps>> = {
   employees: EmployeesView,
   customers: CustomersView,
   payments: PaymentsView,
+  fiscal: FiscalView,
   settings: UsersView,
 }
 
@@ -762,7 +766,7 @@ export function ErpShell() {
 
   // ---------- Menu dinâmico conforme permissões efetivas ----------
   const allowed: ModuleKey[] = (
-    ['dashboard', 'pdv', 'orders', 'bookings', 'delivery', 'production', 'products', 'quality', 'stock', 'purchases', 'cash', 'finance', 'reports', 'employees', 'customers', 'payments', 'settings'] as ModuleKey[]
+    ['dashboard', 'pdv', 'orders', 'bookings', 'delivery', 'production', 'products', 'quality', 'stock', 'purchases', 'cash', 'finance', 'payments', 'fiscal', 'reports', 'employees', 'customers', 'settings'] as ModuleKey[]
   ).filter(
     (key) => operator.isAbsolute || operator.permissions.includes(MODULE_PERMISSION[key])
   )

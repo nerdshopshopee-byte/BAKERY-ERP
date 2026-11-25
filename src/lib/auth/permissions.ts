@@ -144,6 +144,19 @@ export const PERMISSION_MODULES: PermissionModuleDef[] = [
     ],
   },
   {
+    key: 'fiscal',
+    label: 'Fiscal',
+    description: 'Motor fiscal: NFC-e, NF-e e tabelas tributárias',
+    permissions: [
+      { key: 'fiscal.view', label: 'Visualizar documentos fiscais' },
+      { key: 'fiscal.emit', label: 'Emitir NFC-e / NF-e' },
+      { key: 'fiscal.cancel', label: 'Cancelar notas fiscais' },
+      { key: 'fiscal.inutilize', label: 'Inutilizar faixas de numeração' },
+      { key: 'fiscal.config', label: 'Configurar emissor e certificado' },
+      { key: 'fiscal.tables', label: 'Gerenciar tabelas tributárias (IBS/CBS)' },
+    ],
+  },
+  {
     key: 'settings',
     label: 'Configurações',
     description: 'Usuários, perfis e administração',
@@ -193,5 +206,6 @@ export const MODULE_PERMISSION: Record<string, string> = {
   employees: 'employees.view',
   customers: 'customers.view',
   payments: 'finance.payments',
+  fiscal: 'fiscal.view',
   settings: 'settings.view',
 }

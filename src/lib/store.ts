@@ -41,6 +41,7 @@ export type ModuleKey =
   | 'purchases'
   | 'cash'
   | 'finance'
+  | 'fiscal'
   | 'reports'
   | 'employees'
   | 'customers'

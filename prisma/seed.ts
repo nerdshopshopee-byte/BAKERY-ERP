@@ -29,6 +29,11 @@ async function main() {
   console.log('Limpando banco...')
   // Fase 3: acessos, autenticação e permissões
   await db.accessLog.deleteMany()
+  // Fase 4: motor fiscal
+  await db.fiscalEvent.deleteMany()
+  await db.fiscalDocument.deleteMany()
+  await db.taxTable.deleteMany()
+  await db.fiscalConfig.deleteMany()
   await db.passwordResetToken.deleteMany()
   await db.session.deleteMany()
   await db.credential.deleteMany()
@@ -698,7 +703,7 @@ async function main() {
   const { DEFAULT_ROLES } = await import('../src/lib/auth/default-roles')
 
   const company = await db.company.create({
-    data: { name: 'Padaria Pão Dourado', legalName: 'Pão Dourado Panificadora LTDA', cnpj: '12.345.678/0001-90' },
+    data: { name: 'Padaria Pão Dourado', legalName: 'Pão Dourado Panificadora LTDA', cnpj: '12.345.678/0001-95' },
   })
 
   const branchCentro = await db.branch.create({
@@ -837,6 +842,374 @@ async function main() {
       { action: 'PERMISSIONS_UPDATED', actor: 'Ricardo Alves', userId: joao.id, userEmail: joao.email, detail: 'Perfil: ATENDENTE · 2 concessões · 1 restrições', ip: '192.168.0.10', createdAt: daysAgo(2, 15) },
       { action: 'USER_CREATED', actor: 'Ricardo Alves', userId: entregador.id, userEmail: entregador.email, detail: 'Usuário criado com perfil ENTREGADOR · status ACTIVE', ip: '192.168.0.10', createdAt: daysAgo(2, 11) },
     ],
+  })
+
+  // ---------- MOTOR FISCAL (Fase 4 - Etapa 06) ----------
+  console.log('Configurando motor fiscal...')
+  const {
+    generateAccessKey,
+    buildXml,
+    calcTaxes,
+    buildDanfeMeta,
+  } = await import('../src/lib/fiscal/engine')
+
+  const fiscalConfig = await db.fiscalConfig.create({
+    data: {
+      companyName: 'Pão Dourado Panificadora LTDA',
+      cnpj: '12345678000195',
+      ie: 'ISENTO',
+      uf: 'SP',
+      crt: 'SIMPLES_NACIONAL',
+      environment: 'HOMOLOGACAO',
+      provider: 'LOCAL_SIMULADO',
+      nfceSeries: 1,
+      nfceNextNumber: 428, // documentos demo emitidos a partir daqui; contador sincronizado ao final
+      nfeSeries: 1,
+      nfeNextNumber: 18,
+      autoEmit: true,
+      contingency: false,
+      certA1Name: 'certificado-a1-pao-dourado.pfx',
+      certA1Expires: new Date(now.getTime() + 365 * DAY),
+      certA1Status: 'VALID',
+      taxVersion: '2026.1',
+    },
+  })
+
+  // Tabela tributária versionada 2026.1 (Reforma Tributária - IBS/CBS)
+  await db.taxTable.createMany({
+    data: [
+      {
+        version: '2026.1', ncm: '19059090', description: 'Pães e produtos de panificação',
+        cfop: '5102', csosn: '102', icmsRate: 0, ibsRate: 26.5, cbsRate: 8.8, reducedIbs: true,
+      },
+      {
+        version: '2026.1', ncm: '19053100', description: 'Biscoitos doces (bolos)',
+        cfop: '5102', csosn: '102', icmsRate: 0, ibsRate: 26.5, cbsRate: 8.8, reducedIbs: true,
+      },
+      {
+        version: '2026.1', ncm: '21069090', description: 'Confeitaria e preparações (salgados fritos)',
+        cfop: '5102', csosn: '102', icmsRate: 0, ibsRate: 26.5, cbsRate: 8.8,
+      },
+      {
+        version: '2026.1', ncm: '09010110', description: 'Cafés torrados e bebidas de cafeteria',
+        cfop: '5102', csosn: '102', icmsRate: 0, ibsRate: 26.5, cbsRate: 8.8, reducedIbs: true,
+      },
+      {
+        version: '2026.1', ncm: '19021900', description: 'Massas alimentícias (frescas)',
+        cfop: '5102', csosn: '102', icmsRate: 0, ibsRate: 26.5, cbsRate: 8.8,
+      },
+      {
+        version: '2026.1', ncm: '17049010', description: 'Doces e chocolates (bombons, brigadeiros)',
+        cfop: '5102', csosn: '102', icmsRate: 0, ibsRate: 26.5, cbsRate: 8.8,
+      },
+    ],
+  })
+
+  // Documentos fiscais de demonstração sobre vendas recentes
+  const recentSales = await db.sale.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 4,
+    include: { items: true, payments: true },
+  })
+
+  const taxRowsSeed = await db.taxTable.findMany({ where: { version: '2026.1', active: true } })
+  const taxRowInput = taxRowsSeed.map((r) => ({
+    ncm: r.ncm,
+    cfop: r.cfop,
+    csosn: r.csosn,
+    cst: r.cst,
+    icmsRate: r.icmsRate,
+    pisRate: r.pisRate,
+    cofinsRate: r.cofinsRate,
+    ibsRate: r.ibsRate,
+    cbsRate: r.cbsRate,
+    reducedIbs: r.reducedIbs,
+  }))
+
+  const fcVersions: string[] = []
+  let nfceNumber = fiscalConfig.nfceNextNumber
+  const mkDocInput = (sale: NonNullable<typeof recentSales[number]>) => {
+    const taxes = calcTaxes(
+      sale.items.map((item) => ({
+        name: item.name,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        subtotal: item.subtotal,
+        ncm: null,
+      })),
+      taxRowInput,
+      sale.discount,
+    )
+    return { sale, taxes }
+  }
+
+  for (let i = 0; i < 3 && i < recentSales.length; i++) {
+    const { sale, taxes } = mkDocInput(recentSales[i])
+    const number = nfceNumber++
+    const serie = fiscalConfig.nfceSeries
+    const issuedAt = sale.createdAt
+    const accessKey = generateAccessKey({
+      uf: fiscalConfig.uf,
+      cnpj: fiscalConfig.cnpj,
+      type: 'NFCE',
+      serie,
+      number,
+      contingency: false,
+      date: issuedAt,
+    })
+    const xml = buildXml({
+      type: 'NFCE',
+      accessKey,
+      serie,
+      number,
+      environment: 'HOMOLOGACAO',
+      contingency: false,
+      date: issuedAt,
+      issuerName: fiscalConfig.companyName,
+      issuerCnpj: fiscalConfig.cnpj,
+      issuerIe: fiscalConfig.ie,
+      uf: fiscalConfig.uf,
+      crt: fiscalConfig.crt,
+      customerName: sale.customer,
+      customerDoc: null,
+      customerAddress: null,
+      items: sale.items.map((item) => ({
+        name: item.name,
+        qty: item.qty,
+        unit: item.unit,
+        unitPrice: item.unitPrice,
+        subtotal: item.subtotal,
+        ncm: null,
+      })),
+      payments: sale.payments.map((p) => ({ method: p.method, amount: p.amount })),
+      discount: sale.discount,
+      taxes,
+    })
+    const danfe = buildDanfeMeta({
+      type: 'NFCE',
+      accessKey,
+      serie,
+      number,
+      issuerName: fiscalConfig.companyName,
+      issuerCnpj: fiscalConfig.cnpj,
+      items: sale.items.map((item) => ({ name: item.name, qty: item.qty, unitPrice: item.unitPrice, subtotal: item.subtotal })),
+      payments: sale.payments.map((p) => ({ method: p.method, amount: p.amount })),
+      taxes,
+      discount: sale.discount,
+      environment: 'HOMOLOGACAO',
+      contingency: false,
+      date: issuedAt,
+    })
+
+    // Documento 1 e 2 autorizados; documento 3 rejeitado + reenvio autorizado
+    const rejected = i === 2
+    const doc = await db.fiscalDocument.create({
+      data: {
+        type: 'NFCE',
+        serie,
+        number,
+        accessKey,
+        saleId: sale.id,
+        saleCode: sale.code,
+        productsTotal: taxes.productsTotal,
+        discount: sale.discount,
+        icmsTotal: taxes.icmsTotal,
+        ibsTotal: taxes.ibsTotal,
+        cbsTotal: taxes.cbsTotal,
+        total: sale.total,
+        issuerName: fiscalConfig.companyName,
+        issuerCnpj: fiscalConfig.cnpj,
+        customerName: sale.customer,
+        status: rejected ? 'TRANSMITIDA' : 'TRANSMITIDA',
+        environment: 'HOMOLOGACAO',
+        contingency: false,
+        protocol: `135${daysAgo(0, 8, 42).getTime().toString().slice(-12)}`,
+        receivedAt: new Date(issuedAt.getTime() + 45 * 1000),
+        attempts: rejected ? 2 : 1,
+        xml,
+        danfeMeta: JSON.stringify(danfe),
+        operator: sale.operator,
+        issuedAt,
+        events: {
+          create: [
+            {
+              type: 'EMISSAO',
+              accessKey,
+              description: `Documento NFC-e nº ${number}/${serie} gerado`,
+              author: sale.operator ?? 'PDV',
+              createdAt: issuedAt,
+            },
+            ...(rejected
+              ? [
+                  {
+                    type: 'REJEICAO',
+                    accessKey,
+                    description: '539 - Rejeição: Duplicidade de NFC-e com número anterior (seqüência quebrada)',
+                    author: sale.operator ?? 'PDV',
+                    createdAt: new Date(issuedAt.getTime() + 20 * 1000),
+                  },
+                  {
+                    type: 'AUTORIZACAO',
+                    accessKey,
+                    description: `Reenvio autorizado - protocolo 135${issuedAt.getTime().toString().slice(-12)}`,
+                    author: 'Ricardo Alves',
+                    createdAt: new Date(issuedAt.getTime() + 45 * 1000),
+                  },
+                ]
+              : [
+                  {
+                    type: 'AUTORIZACAO',
+                    accessKey,
+                    description: `Autorizado pelo provedor LOCAL_SIMULADO - protocolo 135${issuedAt.getTime().toString().slice(-12)}`,
+                    author: sale.operator ?? 'PDV',
+                    createdAt: new Date(issuedAt.getTime() + 45 * 1000),
+                  },
+                ]),
+          ],
+        },
+      },
+    })
+    fcVersions.push(doc.id)
+  }
+
+  // Nota cancelada com justificativa
+  if (recentSales.length >= 4 && fcVersions.length >= 1) {
+    const { sale, taxes } = mkDocInput(recentSales[3])
+    const number = nfceNumber++
+    const issuedAt = sale.createdAt
+    const accessKey = generateAccessKey({
+      uf: fiscalConfig.uf,
+      cnpj: fiscalConfig.cnpj,
+      type: 'NFCE',
+      serie: fiscalConfig.nfceSeries,
+      number,
+      contingency: false,
+      date: issuedAt,
+    })
+    const xml = buildXml({
+      type: 'NFCE',
+      accessKey,
+      serie: fiscalConfig.nfceSeries,
+      number,
+      environment: 'HOMOLOGACAO',
+      contingency: false,
+      date: issuedAt,
+      issuerName: fiscalConfig.companyName,
+      issuerCnpj: fiscalConfig.cnpj,
+      issuerIe: fiscalConfig.ie,
+      uf: fiscalConfig.uf,
+      crt: fiscalConfig.crt,
+      customerName: sale.customer,
+      customerDoc: null,
+      customerAddress: null,
+      items: sale.items.map((item) => ({ name: item.name, qty: item.qty, unit: item.unit, unitPrice: item.unitPrice, subtotal: item.subtotal, ncm: null })),
+      payments: sale.payments.map((p) => ({ method: p.method, amount: p.amount })),
+      discount: sale.discount,
+      taxes,
+    })
+    await db.fiscalDocument.create({
+      data: {
+        type: 'NFCE',
+        serie: fiscalConfig.nfceSeries,
+        number,
+        accessKey,
+        saleId: sale.id,
+        saleCode: sale.code,
+        productsTotal: taxes.productsTotal,
+        discount: sale.discount,
+        icmsTotal: taxes.icmsTotal,
+        ibsTotal: taxes.ibsTotal,
+        cbsTotal: taxes.cbsTotal,
+        total: sale.total,
+        issuerName: fiscalConfig.companyName,
+        issuerCnpj: fiscalConfig.cnpj,
+        customerName: sale.customer,
+        status: 'CANCELADA',
+        environment: 'HOMOLOGACAO',
+        protocol: `135${issuedAt.getTime().toString().slice(-12)}`,
+        receivedAt: new Date(issuedAt.getTime() + 40 * 1000),
+        attempts: 1,
+        xml,
+        operator: sale.operator,
+        issuedAt,
+        events: {
+          create: [
+            {
+              type: 'EMISSAO',
+              accessKey,
+              description: `Documento NFC-e nº ${number}/${fiscalConfig.nfceSeries} gerado`,
+              author: sale.operator ?? 'PDV',
+              createdAt: issuedAt,
+            },
+            {
+              type: 'AUTORIZACAO',
+              accessKey,
+              description: 'Autorizado pelo provedor LOCAL_SIMULADO',
+              author: sale.operator ?? 'PDV',
+              createdAt: new Date(issuedAt.getTime() + 40 * 1000),
+            },
+            {
+              type: 'CANCELAMENTO',
+              accessKey,
+              description: `Cancelamento homologado - protocolo 135${issuedAt.getTime().toString().slice(-12)} - Justificativa: Operação não efetivada, comprador desistiu da compra`,
+              author: 'Ricardo Alves',
+              createdAt: new Date(issuedAt.getTime() + 2 * 60 * 60 * 1000),
+            },
+          ],
+        },
+      },
+    })
+  }
+
+  // Inutilização de faixa (quebra de sequência)
+  await db.fiscalDocument.create({
+    data: {
+      type: 'NFCE',
+      serie: 1,
+      number: 399,
+      accessKey: generateAccessKey({
+        uf: fiscalConfig.uf,
+        cnpj: fiscalConfig.cnpj,
+        type: 'NFCE',
+        serie: 1,
+        number: 399,
+        contingency: false,
+        date: daysAgo(6, 18),
+      }),
+      productsTotal: 0,
+      total: 0,
+      issuerName: fiscalConfig.companyName,
+      issuerCnpj: fiscalConfig.cnpj,
+      status: 'INUTILIZADA',
+      environment: 'HOMOLOGACAO',
+      issuedAt: daysAgo(6, 18),
+      events: {
+        create: [
+          {
+            type: 'INUTILIZACAO',
+            description: 'Inutilização homologada - NFC-e série 1, faixa 397 a 399 - Justificativa: Quebra de sequência por perda de energia no fechamento do caixa',
+            author: 'Ricardo Alves',
+            createdAt: daysAgo(6, 18),
+          },
+        ],
+      },
+    },
+  })
+
+  await db.fiscalEvent.create({
+    data: {
+      documentId: null,
+      type: 'CONTINGENCIA_OFF',
+      description: 'Emissor saiu de contingência; documentos retidos transmitidos sem rejeições',
+      author: 'Marcia Souza',
+      createdAt: daysAgo(3, 14),
+    },
+  })
+
+  // Sincroniza o próximo número NFC-e com a numeração real usada nos documentos demo
+  await db.fiscalConfig.update({
+    where: { id: fiscalConfig.id },
+    data: { nfceNextNumber: Math.max(nfceNumber, fiscalConfig.nfceNextNumber) },
   })
 
   // ---------- ALERTAS ----------

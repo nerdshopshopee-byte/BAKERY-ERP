@@ -33,6 +33,7 @@ model Product {
   barcode    String?
   byWeight   Boolean  @default(false)
   isKitchen  Boolean  @default(true) // passa pelo KDS/produção
+  ncm        String?  // NCM fiscal (padrão da padaria quando nulo)
   active     Boolean  @default(true)
   notes      String?
   createdAt  DateTime @default(now())
@@ -586,4 +587,115 @@ model WasteRecord {
   actor        String?
   notes        String?
   createdAt    DateTime  @default(now())
+}
+
+// ============ MOTOR FISCAL (Fase 4 - Etapa 06) ============
+// Camada Fiscal Engine: NFC-e 65, NF-e 55, tabelas tributárias versionadas
+// (Reforma Tributária: IBS/CBS), contingência, cancelamento e inutilização.
+
+// Configuração do emissor fiscal da empresa (1 linha ativa)
+model FiscalConfig {
+  id             String   @id @default(cuid())
+  companyName    String   // razão social emitente
+  cnpj           String   @unique
+  ie             String?  // inscrição estadual (isento quando "ISENTO")
+  uf             String   @default("SP")
+  crt            String   @default("SIMPLES_NACIONAL") // SIMPLES_NACIONAL | LUCRO_REAL | LUCRO_PRESUMIDO
+  environment    String   @default("HOMOLOGACAO") // HOMOLOGACAO | PRODUCAO
+  provider       String   @default("LOCAL_SIMULADO") // provedor fiscal plugável (interface)
+  nfceSeries     Int      @default(1)
+  nfceNextNumber Int      @default(1)
+  nfeSeries      Int      @default(1)
+  nfeNextNumber  Int      @default(1)
+  autoEmit       Boolean  @default(false) // emite NFC-e automaticamente no checkout do PDV
+  // Contingência (off-line): mantém numeração local até retorno do SEFAZ
+  contingency    Boolean  @default(false)
+  contingencyReason String?
+  contingencySince  DateTime?
+  // Certificado digital A1 (metadados; arquivo PFX não fica no banco)
+  certA1Name     String?
+  certA1Expires  DateTime?
+  certA1Status   String   @default("MISSING") // MISSING | VALID | EXPIRING | EXPIRED
+  // Versão corrente da tabela tributária (Notas Técnicas versionadas)
+  taxVersion     String   @default("2026.1")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Tabelas tributárias versionadas (NCM, CFOP, CSOSN/CST, ICMS, IBS, CBS)
+// Não são codificadas nas regras comerciais: atualizações independentes por versão.
+model TaxTable {
+  id            String   @id @default(cuid())
+  version       String   @default("2026.1") // versão das NTs (ex: 2026.1 reforma IBS/CBS)
+  ncm           String   // 8 dígitos
+  description   String
+  cfop          String   @default("5102") // operação interna venda de mercadoria
+  origin        String   @default("0") // 0 nacional...
+  csosn         String   @default("102") // SIMPLES: 102/103/400/500; REGIME NORMAL: CST
+  cst           String?  // usado em LUCRO_REAL/PRESUMIDO
+  icmsRate      Float    @default(0)
+  pisRate       Float    @default(0)
+  cofinsRate    Float    @default(0)
+  ibsRate       Float    @default(0)   // reforma tributária 2026
+  cbsRate       Float    @default(0)   // reforma tributária 2026
+  reducedIbs    Boolean  @default(false) // redutor/cesta básica nacional
+  effectiveFrom DateTime @default(now())
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([version, ncm, cfop])
+}
+
+// Documento fiscal emitido (NFC-e modelo 65 ou NF-e modelo 55)
+model FiscalDocument {
+  id            String    @id @default(cuid())
+  type          String    @default("NFCE") // NFCE (modelo 65) | NFE (modelo 55)
+  serie         Int
+  number        Int
+  accessKey     String    @unique // 44 dígitos, dígito verificador calculado
+  saleId        String?   // origem PDV (opcional)
+  saleCode      String?
+  // Valores (snapshot da venda, em R$)
+  productsTotal Float     @default(0)
+  discount      Float     @default(0)
+  icmsTotal     Float     @default(0)
+  ibsTotal      Float     @default(0)
+  cbsTotal      Float     @default(0)
+  total         Float     @default(0)
+  // Emitente e destinatário
+  issuerName    String
+  issuerCnpj    String
+  customerName  String?
+  customerDoc   String?   // CPF/CNPJ do destinatário (obrigatório em NF-e)
+  customerAddress String?
+  // Transmissão
+  status        String    @default("PENDENTE") // PENDENTE | CONTINGENCIA | TRANSMITIDA | REJEITADA | CANCELADA | INUTILIZADA
+  environment   String    @default("HOMOLOGACAO")
+  contingency   Boolean   @default(false)
+  protocol      String?
+  receivedAt    DateTime?
+  rejectCode    String?
+  rejectMessage String?
+  attempts      Int       @default(0)
+  xml           String?   // XML da autorização armazenado (recuperável)
+  danfeMeta     String?   // metadados do DANFE (JSON)
+  operator      String?   // usuário responsável pela emissão
+  issuedAt      DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  events        FiscalEvent[] // declarativo
+}
+
+// Histórico de eventos fiscais (emissão, autorização, rejeições, reenvios,
+// cancelamento, inutilização, contingência) - trilha auditável por documento
+model FiscalEvent {
+  id         String   @id @default(cuid())
+  documentId String?
+  type       String   // EMISSAO | AUTORIZACAO | REJEICAO | REENVIO | CANCELAMENTO | INUTILIZACAO | CONTINGENCIA_ON | CONTINGENCIA_OFF | NUMERACAO
+  accessKey  String?
+  description String
+  author     String?
+  createdAt  DateTime @default(now())
+  document   FiscalDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }

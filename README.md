@@ -28,12 +28,13 @@ ERP completo para padarias: do pão saindo do forno ao fechamento do caixa, do P
 | **Relatórios** | DRE gerencial (receita, CMV, lucro bruto/líquido, margem), vendas por categoria, top produtos, recebimentos por forma de pagamento, aderência de produção e desperdício por motivo — períodos de 7/30/90 dias |
 | **Equipe** | Funcionários com cargos (7 perfis), salários, registro de ponto (entrada/saída) e permissões por perfil |
 | **Mercado Pago** | Cobrança PIX (BR Code copia-e-cola), taxas/valor líquido, confirmação via webhook e conciliação — modo demonstração com o mesmo payload da API oficial |
+| **Fiscal (Motor Fiscal)** | NFC-e modelo 65 e NF-e modelo 55 com chave de acesso de 44 dígitos (módulo 11), XML de autorização armazenado e consultável, DANFE 80mm/A4 na tela, autorização via provedor plugável, contingência off-line (tpEmis 9) com reenvio, cancelamento com justificativa, inutilização de faixa de numeração, tabelas tributárias versionadas com IBS/CBS (Reforma Tributária 2026) e trilha completa de eventos (emissão, autorização, rejeições, reenvios) |
 
 ## Autenticação e permissões (Fase 3)
 
 Login individual por funcionário (e-mail + senha) com hash **Argon2id** (64 MiB), sessão única por usuário (cookie httpOnly com token opaco — o banco guarda apenas o SHA-256) e revogação imediata em bloqueios, resets e alterações de senha.
 
-- **Catálogo centralizado de permissões** — 62 chaves estáveis (`sales.cancel`, `finance.payables.manage`, `inventory.costs`, `settings.users`...) em 12 módulos, fonte única usada pelo guard das APIs e pelo menu do frontend.
+- **Catálogo centralizado de permissões** — 68 chaves estáveis (`sales.cancel`, `finance.payables.manage`, `inventory.costs`, `fiscal.emit`, `fiscal.config`...) em 13 módulos, fonte única usada pelo guard das APIs e pelo menu do frontend.
 - **Dois níveis de acesso** — modelos de perfil reutilizáveis (Proprietário absoluto, Administrador, Gerente, Atendente, Padeiro, Estoquista, Financeiro, Entregador) + personalização individual por usuário (concessão extra, restrição que vence o perfil e **concessão temporária com validade**).
 - **Segurança no backend, não no menu** — todos os ~50 endpoints exigem sessão e permissão específica (`guardApi`/`guardApiAny`); quem não tem `finance.view` não lê financeiro nem digitando a URL nem chamando a API. Custos de produtos são zerados na resposta para quem não tem `inventory.costs`. Negos são registrados na auditoria (`API_DENIED`).
 - **Central de administração** (Configurações → Usuários e Permissões): usuários com busca/filtros/situação (Ativo/Inativo/Bloqueado), matriz granular com indicador parcial, marcar/desmarcar tudo por módulo, copiar permissões de outro usuário, aplicar permissões do perfil, redefinição de senha, encerramento de sessões; perfis editáveis com matriz própria; aba de auditoria (logins, falhas, alterações de permissão, bloqueios, negações de API).
@@ -55,8 +56,8 @@ Login individual por funcionário (e-mail + senha) com hash **Argon2id** (64 MiB
 
 ## Stack
 
-- **Next.js 16 (App Router) + TypeScript** — ~50 route handlers de API protegidos por guard de permissões
-- **Prisma + SQLite** — 41 modelos (vendas, pedidos, encomendas, delivery, produção, estoque, financeiro, pagamentos, auditoria, usuários/sessões/permissões/multi-tenant)
+- **Next.js 16 (App Router) + TypeScript** — ~60 route handlers de API protegidos por guard de permissões
+- **Prisma + SQLite** — 45 modelos (vendas, pedidos, encomendas, delivery, produção, estoque, financeiro, pagamentos, auditoria, usuários/sessões/permissões/multi-tenant, motor fiscal)
 - **Argon2id** (@noble/hashes) — hash de senhas com verificação em tempo constant
 - **Tailwind CSS 4 + shadcn/ui (New York)** — tema "Horno": grafite quente + âmbar
 - **Recharts** — gráficos com dados reais

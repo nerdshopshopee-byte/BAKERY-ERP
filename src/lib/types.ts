@@ -413,3 +413,111 @@ export type ReportSummaryDTO = {
   production: { planned: number; done: number; accuracy: number }
   orders: { total: number; delivered: number; avgMinutes: number | null }
 }
+
+// ============ MOTOR FISCAL (Etapa 06) ============
+
+export type FiscalConfigDTO = {
+  id: string
+  companyName: string
+  cnpj: string
+  ie: string | null
+  uf: string
+  crt: string // SIMPLES_NACIONAL | LUCRO_REAL | LUCRO_PRESUMIDO
+  environment: string // HOMOLOGACAO | PRODUCAO
+  provider: string
+  nfceSeries: number
+  nfceNextNumber: number
+  nfeSeries: number
+  nfeNextNumber: number
+  autoEmit: boolean
+  contingency: boolean
+  contingencyReason: string | null
+  contingencySince: string | null
+  certA1Name: string | null
+  certA1Expires: string | null
+  certStatus: string // MISSING | VALID | EXPIRING | EXPIRED
+  taxVersion: string
+}
+
+export type TaxTableDTO = {
+  id: string
+  version: string
+  ncm: string
+  description: string
+  cfop: string
+  origin: string
+  csosn: string
+  cst?: string | null
+  icmsRate: number
+  pisRate: number
+  cofinsRate: number
+  ibsRate: number
+  cbsRate: number
+  reducedIbs: boolean
+  active: boolean
+}
+
+export type FiscalDocumentDTO = {
+  id: string
+  type: string // NFCE | NFE
+  serie: number
+  number: number
+  accessKey: string
+  saleId?: string | null
+  saleCode?: string | null
+  productsTotal: number
+  discount: number
+  icmsTotal: number
+  ibsTotal: number
+  cbsTotal: number
+  total: number
+  issuerName: string
+  issuerCnpj: string
+  customerName: string | null
+  customerDoc: string | null
+  status: string // PENDENTE | CONTINGENCIA | TRANSMITIDA | REJEITADA | CANCELADA | INUTILIZADA
+  environment: string
+  contingency: boolean
+  protocol?: string | null
+  receivedAt?: string | null
+  rejectCode?: string | null
+  rejectMessage?: string | null
+  attempts: number
+  operator?: string | null
+  issuedAt: string
+}
+
+export type FiscalEventDTO = {
+  id: string
+  documentId: string | null
+  type: string // EMISSAO | AUTORIZACAO | REJEICAO | REENVIO | CANCELAMENTO | INUTILIZACAO | CONTINGENCIA_ON | CONTINGENCIA_OFF
+  accessKey: string | null
+  description: string
+  author: string | null
+  createdAt: string
+}
+
+export type FiscalDocumentDetailDTO = FiscalDocumentDTO & {
+  xml?: string | null
+  danfeMeta?: string | null
+  events: FiscalEventDTO[]
+}
+
+export type DanfeMetaDTO = {
+  widthMm: number
+  type: 'NFCE' | 'NFE'
+  chave: string
+  serie: number
+  numero: number
+  emitente: string
+  cnpj: string
+  itens: { name: string; qty: number; unitPrice: number; subtotal: number }[]
+  pagamentos: { label: string; amount: number }[]
+  tributos: { icms: number; ibs: number; cbs: number }
+  total: number
+  desconto: number
+  ambiente: string
+  contingencia: boolean
+  emitidoEm: string
+  consulta: string
+}

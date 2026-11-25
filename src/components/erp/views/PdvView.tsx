@@ -265,7 +265,7 @@ export default function PdvView({ operator }: ViewProps) {
     }
     setPaying(true)
     try {
-      const sale = await apiPost<SaleDTO>('/api/sales', {
+      const sale = await apiPost<SaleDTO & { fiscal?: { issued: boolean; status?: string; number?: number; error?: string } }>('/api/sales', {
         items: cart.map((l) => ({ productId: l.product.id, qty: l.qty })),
         discount: discountNum,
         payments: payments.map((p) => ({ method: p.method, amount: round2(parseNum(p.amount)) })),
@@ -274,6 +274,15 @@ export default function PdvView({ operator }: ViewProps) {
         ...(customerId !== 'none' ? { customerId } : {}),
       })
       toast.success(`Venda ${sale.code} concluída`)
+      if (sale.fiscal?.issued) {
+        toast.success(`NFC-e nº ${sale.fiscal.number} ${sale.fiscal.status === 'TRANSMITIDA' ? 'autorizada' : 'emitida'}`, {
+          description: 'Documento disponível no módulo Fiscal (XML e DANFE).',
+        })
+      } else if (sale.fiscal?.error) {
+        toast.warning('Venda concluída sem NFC-e', {
+          description: sale.fiscal.error,
+        })
+      }
       setReceipt(sale)
       setPayOpen(false)
       setCart([])
@@ -750,6 +759,14 @@ export default function PdvView({ operator }: ViewProps) {
               </div>
               {receipt.customer ? (
                 <p className="text-xs text-muted-foreground">Cliente: {receipt.customer}</p>
+              ) : null}
+              {(receipt as SaleDTO & { fiscal?: { issued: boolean; status?: string; number?: number; error?: string } }).fiscal?.issued ? (
+                <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-2 text-xs text-emerald-400">
+                  NFC-e nº {(receipt as SaleDTO & { fiscal?: { issued: boolean; status?: string; number?: number } }).fiscal?.number}{' '}
+                  {(receipt as SaleDTO & { fiscal?: { issued: boolean; status?: string; number?: number } }).fiscal?.status === 'TRANSMITIDA'
+                    ? 'autorizada - XML e DANFE disponíveis no módulo Fiscal'
+                    : 'emitida - consulte o módulo Fiscal'}
+                </div>
               ) : null}
             </div>
           ) : null}

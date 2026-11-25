@@ -311,7 +311,22 @@ export async function POST(request: NextRequest) {
       where: { id: sale.id },
       include: { items: true, payments: true },
     })
-    return Response.json(fullSale)
+
+    // Emissão automática de NFC-e (configurável em Fiscal > Configuração).
+    // Falha fiscal NUNCA desfaz a venda: o documento fica pendente/rejeitado para reenvio.
+    let fiscal: { issued: boolean; status?: string; number?: number; accessKey?: string; error?: string } = { issued: false }
+    try {
+      const config = await db.fiscalConfig.findFirst({ orderBy: { createdAt: 'asc' } })
+      if (config?.autoEmit) {
+        const { emitFromSale } = await import('@/lib/fiscal/service')
+        const document = await emitFromSale({ saleId: sale.id, type: 'NFCE', operator: body.operator?.trim() || g.user.name })
+        fiscal = { issued: true, status: document.status, number: document.number, accessKey: document.accessKey }
+      }
+    } catch (fiscalError) {
+      fiscal = { issued: false, error: fiscalError instanceof Error ? fiscalError.message : 'Falha fiscal' }
+    }
+
+    return Response.json({ ...fullSale, fiscal })
   } catch (error) {
     return toErrorResponse(error)
   }
