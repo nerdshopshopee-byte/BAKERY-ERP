@@ -150,7 +150,7 @@ function MiniStat({
       <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Icon className="size-4" />
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className="truncate">{label}</span>
           {pulse ? (
@@ -159,7 +159,12 @@ function MiniStat({
             </Badge>
           ) : null}
         </p>
-        <p className="text-lg font-semibold tabular-nums">{value}</p>
+        <p
+          className={`font-semibold tabular-nums ${value.length > 9 ? 'text-sm' : 'text-lg'}`}
+          title={value}
+        >
+          {value}
+        </p>
       </div>
     </div>
   )

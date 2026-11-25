@@ -324,9 +324,9 @@ export default function PdvView({ operator }: ViewProps) {
         </Button>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[1fr_380px]">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* ===================== Catálogo ===================== */}
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <div className="relative">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
