@@ -1,8 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// BAKERY ERP - Schema completo de gestão de padarias
+// SQLite + Prisma Client | Modelos planos (ids como string, sem FK estrita)
+// para simplificar transações e evitar joins aninhados desnecessários.
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +11,344 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
+// ============ CATÁLOGO ============
+
+model Category {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
+  name      String
+  imageUrl  String?
+  emoji     String?
+  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Post {
+model Product {
+  id         String   @id @default(cuid())
+  name       String
+  categoryId String?
+  unit       String   @default("UN") // UN | KG
+  price      Float    @default(0)
+  cost       Float    @default(0)
+  barcode    String?
+  byWeight   Boolean  @default(false)
+  isKitchen  Boolean  @default(true) // passa pelo KDS/produção
+  active     Boolean  @default(true)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ============ INSUMOS / ESTOQUE ============
+
+model Ingredient {
+  id           String   @id @default(cuid())
+  name         String
+  unit         String   @default("KG") // KG | G | L | ML | UN | PCT
+  costPerUnit  Float    @default(0)
+  stock        Float    @default(0)
+  minStock     Float    @default(0)
+  supplierId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StockMovement {
+  id           String   @id @default(cuid())
+  itemType     String   @default("INGREDIENT") // INGREDIENT | PRODUCT
+  ingredientId String?
+  productId    String?
+  type         String   @default("ENTRADA") // ENTRADA | SAIDA | AJUSTE | PERDA | PRODUCAO | VENDA
+  qty          Float
+  unitCost     Float?
+  reason       String?
+  refId        String?  // id da OP, compra, venda etc.
+  createdAt    DateTime @default(now())
+}
+
+// ============ RECEITAS / PRODUÇÃO ============
+
+model Recipe {
+  id        String       @id @default(cuid())
+  name      String
+  productId String?
+  yieldQty  Float        @default(1) // rendimento
+  unit      String       @default("UN")
+  laborCost Float        @default(0) // custo de mão de obra/energia por lote
+  notes     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  items     RecipeItem[] // declarativo; Prisma gera FK automática
+}
+
+model RecipeItem {
+  id           String  @id @default(cuid())
+  recipeId     String
+  ingredientId String
+  qty          Float
+  recipe       Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
+
+model ProductionOrder {
+  id          String    @id @default(cuid())
+  code        String
+  recipeId    String
+  recipeName  String
+  plannedQty  Float
+  producedQty Float?
+  status      String    @default("PLANEJADA") // PLANEJADA | EM_ANDAMENTO | CONCLUIDA | CANCELADA
+  operator    String?
+  notes       String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+// ============ COMPRAS ============
+
+model Supplier {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  items     String?
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Purchase {
+  id         String         @id @default(cuid())
+  code       String
+  supplierId String
+  supplier   String
+  status     String         @default("PENDENTE") // PENDENTE | RECEBIDA | CANCELADA
+  total      Float          @default(0)
+  notes      String?
+  receivedAt DateTime?
+  createdAt  DateTime       @default(now())
+  items      PurchaseItem[] // declarativo
+}
+
+model PurchaseItem {
+  id           String   @id @default(cuid())
+  purchaseId   String
+  ingredientId String
+  name         String
+  unit         String
+  qty          Float
+  unitCost     Float
+  purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+}
+
+// ============ CLIENTES ============
+
+model Customer {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  address       String?
+  birthday      String?
+  points        Int      @default(0)
+  creditBalance Float    @default(0) // fiado acumulado
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ============ FUNCIONÁRIOS / RH ============
+
+model Employee {
+  id        String    @id @default(cuid())
+  name      String
+  role      String    @default("ATENDENTE") // PROPRIETARIO | GERENTE | CAIXA | PADEIRO | ATENDENTE | FINANCEIRO | ESTOQUISTA
+  salary    Float     @default(0)
+  phone     String?
+  hiredAt   DateTime  @default(now())
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  logs      TimeLog[] // declarativo
+}
+
+model TimeLog {
+  id         String   @id @default(cuid())
+  employeeId String
+  checkIn    DateTime
+  checkOut   DateTime?
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// ============ CAIXA ============
+
+model CashSession {
+  id             String    @id @default(cuid())
+  operatorName   String
+  openingBalance Float     @default(0)
+  closingBalance Float?
+  expectedBalance Float?
+  status         String    @default("ABERTO") // ABERTO | FECHADO
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime?
+}
+
+model CashMovement {
+  id          String   @id @default(cuid())
+  sessionId   String
+  type        String   @default("VENDA") // VENDA | SANGRIA | SUPRIMENTO | AJUSTE
+  method      String?  // forma de pagamento quando VENDA
+  amount      Float
+  description String?
+  refId       String?
+  createdAt   DateTime @default(now())
+}
+
+// ============ VENDAS (PDV) ============
+
+model Sale {
+  id         String        @id @default(cuid())
+  code       String
+  customerId String?
+  customer   String?
+  sessionId  String?
+  total      Float         @default(0)
+  discount   Float         @default(0)
+  status     String        @default("CONCLUIDA") // CONCLUIDA | CANCELADA
+  channel    String        @default("BALCAO") // BALCAO | ENCOMENDA | DELIVERY
+  operator   String?
+  createdAt  DateTime      @default(now())
+  items      SaleItem[]    // declarativo
+  payments   SalePayment[] // declarativo
+}
+
+model SaleItem {
+  id        String @id @default(cuid())
+  saleId    String
+  productId String
+  name      String
+  qty       Float
+  unitPrice Float
+  unit      String @default("UN")
+  subtotal  Float
+  sale      Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+}
+
+model SalePayment {
+  id      String @id @default(cuid())
+  saleId  String
+  method  String // DINHEIRO | PIX | DEBITO | CREDITO | VALE | FIADO
+  amount  Float
+  sale    Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+}
+
+// ============ PEDIDOS (KDS) ============
+
+model Order {
+  id           String     @id @default(cuid())
+  code         String
+  customerName String?
+  phone        String?
+  source       String     @default("PDV") // PDV | ENCOMENDA | DELIVERY | WHATSAPP
+  status       String     @default("AGUARDANDO") // AGUARDANDO | PREPARANDO | PRONTO | ENTREGUE | CANCELADO
+  notes        String?
+  expectedAt   DateTime?
+  saleId       String?
+  startedAt    DateTime?
+  readyAt      DateTime?
+  deliveredAt  DateTime?
+  createdAt    DateTime   @default(now())
+  items        OrderItem[] // declarativo
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String?
+  name      String
+  qty       Float
+  notes     String?
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+// ============ FINANCEIRO ============
+
+model Payable {
+  id          String    @id @default(cuid())
+  description String
+  supplierId  String?
+  supplier    String?
+  category    String?   // INSUMOS | FOLHA | ALUGUEL | ENERGIA | TAXAS | OUTROS
+  amount      Float
+  dueDate     DateTime
+  status      String    @default("PENDENTE") // PENDENTE | PAGO
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Receivable {
+  id          String    @id @default(cuid())
+  description String
+  customerId  String?
+  customer    String?
+  saleId      String?
+  amount      Float
+  dueDate     DateTime
+  status      String    @default("PENDENTE") // PENDENTE | RECEBIDO
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  type        String   @default("RECEITA") // RECEITA | DESPESA
+  category    String?  // VENDAS | INSUMOS | FOLHA | ALUGUEL | ENERGIA | TAXAS | OUTROS
+  description String
+  amount      Float
+  method      String?
+  refId       String?
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+// ============ PAGAMENTOS (MERCADO PAGO) ============
+
+model Payment {
+  id         String    @id @default(cuid())
+  provider   String    @default("MERCADOPAGO")
+  externalId String?
+  method     String    @default("PIX") // PIX | CREDITO | DEBITO
+  amount     Float
+  fee        Float     @default(0)
+  netAmount  Float     @default(0)
+  status     String    @default("PENDENTE") // PENDENTE | PAGO | CANCELADO
+  pixCode    String?
+  qrImageUrl String?
+  description String?
+  saleId     String?
+  orderId    String?
+  customerId String?
+  createdAt  DateTime  @default(now())
+  paidAt     DateTime?
+}
+
+// ============ AUDITORIA / ALERTAS ============
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String?
+  action    String
+  entity    String?
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  level     String   @default("INFO") // INFO | WARNING | CRITICAL
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
