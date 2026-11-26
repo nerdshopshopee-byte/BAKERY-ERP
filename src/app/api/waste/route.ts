@@ -24,7 +24,7 @@ function toErrorResponse(error: unknown): Response {
   return Response.json({ error: 'Erro interno do servidor' }, { status: 500 })
 }
 
-const REASONS = ['VENCIDO', 'QUEIMADO', 'ERRO_PRODUCAO', 'DEVOLUCAO', 'OUTROS']
+const REASONS = ['VENCIDO', 'QUEIMADO', 'ERRO_PRODUCAO', 'DEVOLUCAO', 'DANIFICADO', 'SOBRA', 'DESCARTE', 'OUTROS']
 
 function numField(value: unknown): number {
   const n = typeof value === 'string' ? Number(value.replace(',', '.')) : typeof value === 'number' ? value : NaN
@@ -38,6 +38,10 @@ interface WasteBody {
   qty?: number | string
   reason?: string
   actor?: string
+  sector?: string
+  lot?: string
+  refOrderId?: string
+  photoUrl?: string
   notes?: string
 }
 
@@ -77,6 +81,10 @@ export async function POST(request: NextRequest) {
 
     const actor = typeof body.actor === 'string' && body.actor.trim() !== '' ? body.actor.trim() : null
     const notes = typeof body.notes === 'string' && body.notes.trim() !== '' ? body.notes.trim() : null
+    const sector = typeof body.sector === 'string' && body.sector.trim() !== '' ? body.sector.trim() : null
+    const lot = typeof body.lot === 'string' && body.lot.trim() !== '' ? body.lot.trim() : null
+    const refOrderId = typeof body.refOrderId === 'string' && body.refOrderId.trim() !== '' ? body.refOrderId.trim() : null
+    const photoUrl = typeof body.photoUrl === 'string' && body.photoUrl.trim() !== '' ? body.photoUrl.trim() : null
 
     const result = await db.$transaction(async (tx) => {
       if (itemType === 'INGREDIENT') {
@@ -101,6 +109,10 @@ export async function POST(request: NextRequest) {
             reason,
             cost,
             actor,
+            sector,
+            lot,
+            refOrderId,
+            photoUrl,
             notes,
           },
         })
@@ -145,6 +157,10 @@ export async function POST(request: NextRequest) {
           reason,
           cost,
           actor,
+          sector,
+          lot,
+          refOrderId,
+          photoUrl,
           notes,
         },
       })

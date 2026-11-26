@@ -79,6 +79,16 @@ type ProductForm = {
   byWeight: boolean
   isKitchen: boolean
   notes: string
+  plu: string
+  saleUnit: 'UN' | 'KG' | 'G' | 'L' | 'ML'
+  isWeighable: boolean
+  tara: string
+  shelfLifeDays: string
+  lotControl: boolean
+  weighDepartment: string
+  trackStock: boolean
+  stock: string
+  minStock: string
 }
 type CategoryForm = { name: string; emoji: string; imageUrl: string }
 
@@ -92,6 +102,16 @@ const EMPTY_PRODUCT: ProductForm = {
   byWeight: false,
   isKitchen: true,
   notes: '',
+  plu: '',
+  saleUnit: 'UN',
+  isWeighable: false,
+  tara: '',
+  shelfLifeDays: '',
+  lotControl: false,
+  weighDepartment: '',
+  trackStock: false,
+  stock: '',
+  minStock: '',
 }
 
 const PRODUCT_IMAGES = [
@@ -207,6 +227,16 @@ export default function ProductsView({ operator }: ViewProps) {
       byWeight: p.byWeight,
       isKitchen: p.isKitchen,
       notes: p.notes ?? '',
+      plu: p.plu ?? '',
+      saleUnit: (p.saleUnit as ProductForm['saleUnit']) || (p.byWeight ? 'KG' : 'UN'),
+      isWeighable: p.isWeighable ?? p.byWeight,
+      tara: p.tara ? String(p.tara) : '',
+      shelfLifeDays: p.shelfLifeDays ? String(p.shelfLifeDays) : '',
+      lotControl: p.lotControl ?? false,
+      weighDepartment: p.weighDepartment ?? '',
+      trackStock: p.trackStock ?? false,
+      stock: p.stock ? String(p.stock) : '',
+      minStock: p.minStock ? String(p.minStock) : '',
     })
     setFormOpen(true)
   }
@@ -231,9 +261,19 @@ export default function ProductsView({ operator }: ViewProps) {
         cost: round2(parseNum(form.cost)),
         unit: form.unit,
         barcode: form.barcode.trim() || null,
-        byWeight: form.byWeight,
+        byWeight: form.byWeight || form.isWeighable,
         isKitchen: form.isKitchen,
         notes: form.notes.trim() || null,
+        plu: form.plu.trim() || null,
+        saleUnit: form.saleUnit,
+        isWeighable: form.isWeighable,
+        tara: parseNum(form.tara),
+        shelfLifeDays: form.shelfLifeDays.trim() ? Math.trunc(parseNum(form.shelfLifeDays)) : null,
+        lotControl: form.lotControl,
+        weighDepartment: form.weighDepartment.trim() || null,
+        trackStock: form.trackStock,
+        stock: parseNum(form.stock),
+        minStock: parseNum(form.minStock),
       }
       if (editing) {
         await apiPatch<ProductDTO>(`/api/products/${editing.id}`, payload)
@@ -561,6 +601,15 @@ export default function ProductsView({ operator }: ViewProps) {
                 placeholder="Opcional"
               />
             </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="p-plu">Código PLU (balanças)</Label>
+              <Input
+                id="p-plu"
+                value={form.plu}
+                onChange={(e) => setForm((f) => ({ ...f, plu: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                placeholder="Ex.: 00123 — até 6 dígitos"
+              />
+            </div>
             <div className="flex items-center justify-between rounded-lg border px-3 py-2">
               <div>
                 <p className="text-sm font-medium">Vendido por peso</p>
@@ -569,8 +618,8 @@ export default function ProductsView({ operator }: ViewProps) {
                 </p>
               </div>
               <Switch
-                checked={form.byWeight}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, byWeight: v }))}
+                checked={form.byWeight || form.isWeighable}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, isWeighable: v, saleUnit: v && f.saleUnit === 'UN' ? 'KG' : f.saleUnit }))}
               />
             </div>
             <div className="flex items-center justify-between rounded-lg border px-3 py-2">
@@ -584,6 +633,126 @@ export default function ProductsView({ operator }: ViewProps) {
                 checked={form.isKitchen}
                 onCheckedChange={(v) => setForm((f) => ({ ...f, isKitchen: v }))}
               />
+            </div>
+            <div className="rounded-lg border px-3 py-3 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Peso e balança
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="p-saleUnit">Unidade de venda</Label>
+                  <Select
+                    value={form.saleUnit}
+                    onValueChange={(v) => setForm((f) => ({ ...f, saleUnit: v as ProductForm['saleUnit'] }))}
+                  >
+                    <SelectTrigger id="p-saleUnit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UN">Unidade (UN)</SelectItem>
+                      <SelectItem value="KG">Quilograma (KG)</SelectItem>
+                      <SelectItem value="G">Grama (G)</SelectItem>
+                      <SelectItem value="L">Litro (L)</SelectItem>
+                      <SelectItem value="ML">Mililitro (ML)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="p-tara">Tara (gramas)</Label>
+                  <Input
+                    id="p-tara"
+                    inputMode="decimal"
+                    value={form.tara}
+                    onChange={(e) => setForm((f) => ({ ...f, tara: e.target.value }))}
+                    placeholder="Ex.: 50"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="p-shelf">Validade (dias)</Label>
+                  <Input
+                    id="p-shelf"
+                    inputMode="numeric"
+                    value={form.shelfLifeDays}
+                    onChange={(e) => setForm((f) => ({ ...f, shelfLifeDays: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="Ex.: 1"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="p-dept">Setor de pesagem</Label>
+                  <Input
+                    id="p-dept"
+                    value={form.weighDepartment}
+                    onChange={(e) => setForm((f) => ({ ...f, weighDepartment: e.target.value }))}
+                    placeholder="Ex.: PADARIA"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">Etiqueta de balança</p>
+                  <p className="text-xs text-muted-foreground">Tara, validade e PLU na etiqueta</p>
+                </div>
+                <Switch
+                  checked={form.isWeighable}
+                  onCheckedChange={(v) =>
+                    setForm((f) => ({
+                      ...f,
+                      isWeighable: v,
+                      byWeight: v || f.byWeight,
+                      saleUnit: v && f.saleUnit === 'UN' ? 'KG' : f.saleUnit,
+                    }))
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">Controlar lote</p>
+                  <p className="text-xs text-muted-foreground">Produção com código de lote</p>
+                </div>
+                <Switch
+                  checked={form.lotControl}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, lotControl: v }))}
+                />
+              </div>
+            </div>
+            <div className="rounded-lg border px-3 py-3 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Estoque do produto pronto
+              </p>
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">Baixar estoque na venda</p>
+                  <p className="text-xs text-muted-foreground">
+                    Produtos com saldo próprio (não preparados na hora)
+                  </p>
+                </div>
+                <Switch
+                  checked={form.trackStock}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, trackStock: v }))}
+                />
+              </div>
+              {form.trackStock && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="p-stock">Estoque atual</Label>
+                    <Input
+                      id="p-stock"
+                      inputMode="decimal"
+                      value={form.stock}
+                      onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="p-minstock">Estoque mínimo</Label>
+                    <Input
+                      id="p-minstock"
+                      inputMode="decimal"
+                      value={form.minStock}
+                      onChange={(e) => setForm((f) => ({ ...f, minStock: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="p-notes">Observações</Label>

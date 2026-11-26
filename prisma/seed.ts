@@ -29,6 +29,13 @@ async function main() {
   console.log('Limpando banco...')
   // Fase 3: acessos, autenticação e permissões
   await db.accessLog.deleteMany()
+  // Fase 5: balanças
+  await db.scaleReading.deleteMany()
+  await db.scaleSyncItem.deleteMany()
+  await db.scaleSyncJob.deleteMany()
+  await db.scaleProductMapping.deleteMany()
+  await db.scaleDevice.deleteMany()
+  await db.scaleBarcodeProfile.deleteMany()
   // Fase 4: motor fiscal
   await db.fiscalEvent.deleteMany()
   await db.fiscalDocument.deleteMany()
@@ -95,7 +102,7 @@ async function main() {
   // ---------- PRODUTOS ----------
   const productData = [
     // Pães
-    { name: 'Pão Francês', categoryId: cat('Pães'), unit: 'UN', price: 0.79, cost: 0.31, byWeight: false, barcode: '7891000000011' },
+    { name: 'Pão Francês', categoryId: cat('Pães'), unit: 'KG', saleUnit: 'KG', price: 14.9, cost: 7.8, byWeight: true, isWeighable: true, plu: '000123', tara: 0, shelfLifeDays: 1, lotControl: true, trackStock: true, stock: 12.5, minStock: 5, weighDepartment: 'PADARIA', barcode: null },
     { name: 'Pão Integral', categoryId: cat('Pães'), unit: 'UN', price: 1.29, cost: 0.52, barcode: '7891000000028' },
     { name: 'Pão de Queijo', categoryId: cat('Pães'), unit: 'UN', price: 3.5, cost: 1.4, barcode: '7891000000035' },
     { name: 'Baguete', categoryId: cat('Pães'), unit: 'UN', price: 4.9, cost: 1.9, barcode: '7891000000042' },
@@ -106,7 +113,7 @@ async function main() {
     { name: 'Bolo de Chocolate', categoryId: cat('Confeitaria'), unit: 'UN', price: 11.5, cost: 4.2, barcode: '7891000000080' },
     { name: 'Bolo de Fubá', categoryId: cat('Confeitaria'), unit: 'UN', price: 9.9, cost: 3.4, barcode: '7891000000097' },
     { name: 'Brownie', categoryId: cat('Confeitaria'), unit: 'UN', price: 6.5, cost: 2.2, barcode: '7891000000103' },
-    { name: 'Bolo Aniversário Personalizado (kg)', categoryId: cat('Confeitaria'), unit: 'KG', price: 68.0, cost: 26.0, byWeight: true, barcode: '7891000000110' },
+    { name: 'Bolo Aniversário Personalizado (kg)', categoryId: cat('Confeitaria'), unit: 'KG', saleUnit: 'KG', price: 68.0, cost: 26.0, byWeight: true, isWeighable: true, plu: '000124', tara: 80, shelfLifeDays: 5, trackStock: false, barcode: null },
     // Salgados
     { name: 'Coxinha', categoryId: cat('Salgados'), unit: 'UN', price: 5.5, cost: 1.9, barcode: '7891000000127' },
     { name: 'Risole de Carne', categoryId: cat('Salgados'), unit: 'UN', price: 5.5, cost: 1.8, barcode: '7891000000134' },
@@ -126,6 +133,8 @@ async function main() {
     { name: 'Suco de Laranja 500ml', categoryId: cat('Cafeteria'), unit: 'UN', price: 9.5, cost: 3.2, barcode: '7891000000257' },
     { name: 'Chá Gelado 500ml', categoryId: cat('Cafeteria'), unit: 'UN', price: 7.0, cost: 1.9, barcode: '7891000000264' },
     // Lanches
+    { name: 'X-Salada', categoryId: cat('Lanches'), unit: 'UN', saleUnit: 'UN', price: 18.9, cost: 6.2, barcode: '7891000000370' },
+    { name: 'X-Bacon', categoryId: cat('Lanches'), unit: 'UN', saleUnit: 'UN', price: 22.9, cost: 7.8, barcode: '7891000000387' },
     { name: 'Pão na Chapa', categoryId: cat('Lanches'), unit: 'UN', price: 6.5, cost: 1.8, barcode: '7891000000271' },
     { name: 'Misto Quente', categoryId: cat('Lanches'), unit: 'UN', price: 8.5, cost: 2.7, barcode: '7891000000288' },
     { name: 'Sanduíche Natural', categoryId: cat('Lanches'), unit: 'UN', price: 9.9, cost: 3.1, barcode: '7891000000295' },
@@ -169,6 +178,16 @@ async function main() {
     { name: 'Café Torrado e Moído', unit: 'KG', costPerUnit: 42.0, stock: 7.5, minStock: 5, supplierId: suppliers[4].id },
     { name: 'Embalagem Sacola Kraft P', unit: 'PCT', costPerUnit: 18.0, stock: 4, minStock: 6, supplierId: suppliers[3].id },
     { name: 'Caixa para Bolo', unit: 'UN', costPerUnit: 2.4, stock: 120, minStock: 60, supplierId: suppliers[3].id },
+    // Lanchonete (fichas técnicas de lanches e bebidas)
+    { name: 'Pão de Hambúrguer', unit: 'UN', costPerUnit: 1.1, stock: 80, minStock: 40, supplierId: suppliers[0].id },
+    { name: 'Hambúrguer Bovino 120g', unit: 'UN', costPerUnit: 3.6, stock: 60, minStock: 30, supplierId: suppliers[2].id },
+    { name: 'Bacon em Cubos', unit: 'KG', costPerUnit: 34.0, stock: 3.5, minStock: 2, supplierId: suppliers[2].id },
+    { name: 'Presunto Fatiado', unit: 'KG', costPerUnit: 26.0, stock: 2.8, minStock: 1.5, supplierId: suppliers[2].id },
+    { name: 'Alface Crespa', unit: 'KG', costPerUnit: 6.5, stock: 4.2, minStock: 2, supplierId: suppliers[2].id },
+    { name: 'Tomate Salada', unit: 'KG', costPerUnit: 7.9, stock: 6.0, minStock: 3, supplierId: suppliers[2].id },
+    { name: 'Molho Especial da Casa', unit: 'L', costPerUnit: 14.0, stock: 2.5, minStock: 1, supplierId: suppliers[3].id },
+    { name: 'Laranja Pera', unit: 'KG', costPerUnit: 4.5, stock: 18, minStock: 10, supplierId: suppliers[2].id },
+    { name: 'Copo Plástico 500ml', unit: 'UN', costPerUnit: 0.28, stock: 300, minStock: 150, supplierId: suppliers[3].id },
   ]
   const ingredients = await Promise.all(ingredientData.map((i) => db.ingredient.create({ data: i })))
   const ing = (name: string) => ingredients.find((i) => i.name === name)!.id
@@ -247,6 +266,103 @@ async function main() {
           { ingredientId: ing('Óleo de Soja'), qty: 3.5 },
           { ingredientId: ing('Leite Integral'), qty: 2.5 },
           { ingredientId: ing('Sal Refinado'), qty: 0.1 },
+        ],
+      },
+    },
+  })
+
+  // ---------- FICHAS TÉCNICAS DA LANCHONETE (Fase 5) ----------
+  console.log('Criando fichas técnicas da lanchonete...')
+  const recipeXSalada = await db.recipe.create({
+    data: {
+      name: 'X-Salada da Casa',
+      productId: prod('X-Salada'),
+      yieldQty: 1,
+      unit: 'UN',
+      laborCost: 1.8,
+      packagingCost: 0.45,
+      lossPct: 4,
+      prepTimeMin: 8,
+      targetMarginPct: 62,
+      notes: 'Chapa aquecida 180°C. Hambúrguer ponto médio.',
+      items: {
+        create: [
+          { ingredientId: ing('Pão de Hambúrguer'), qty: 1 },
+          { ingredientId: ing('Hambúrguer Bovino 120g'), qty: 1 },
+          { ingredientId: ing('Queijo Muçarela'), qty: 0.03 },
+          { ingredientId: ing('Presunto Fatiado'), qty: 0.025 },
+          { ingredientId: ing('Alface Crespa'), qty: 0.015 },
+          { ingredientId: ing('Tomate Salada'), qty: 0.03 },
+          { ingredientId: ing('Molho Especial da Casa'), qty: 0.02 },
+        ],
+      },
+      modifiers: {
+        create: [
+          { name: 'Bacon extra', kind: 'ADDITION', ingredientId: ing('Bacon em Cubos'), qty: 0.04, unit: 'KG', extraPrice: 4.5, sortOrder: 1 },
+          { name: 'Ovo extra', kind: 'ADDITION', ingredientId: ing('Ovos'), qty: 1, unit: 'UN', extraPrice: 2.5, sortOrder: 2 },
+          { name: 'Hambúrguer extra', kind: 'ADDITION', ingredientId: ing('Hambúrguer Bovino 120g'), qty: 1, unit: 'UN', extraPrice: 5.0, sortOrder: 3 },
+          { name: 'Queijo extra', kind: 'ADDITION', ingredientId: ing('Queijo Muçarela'), qty: 0.03, unit: 'KG', extraPrice: 3.0, sortOrder: 4 },
+          { name: 'Sem tomate', kind: 'REMOVAL', ingredientId: ing('Tomate Salada'), qty: 0.03, unit: 'KG', sortOrder: 5 },
+          { name: 'Sem alface', kind: 'REMOVAL', ingredientId: ing('Alface Crespa'), qty: 0.015, unit: 'KG', sortOrder: 6 },
+          { name: 'Sem molho', kind: 'REMOVAL', ingredientId: ing('Molho Especial da Casa'), qty: 0.02, unit: 'L', sortOrder: 7 },
+          { name: 'Ponto da carne: bem passado', kind: 'OPTION', sortOrder: 8 },
+        ],
+      },
+    },
+  })
+  const recipeXBacon = await db.recipe.create({
+    data: {
+      name: 'X-Bacon da Casa',
+      productId: prod('X-Bacon'),
+      yieldQty: 1,
+      unit: 'UN',
+      laborCost: 2.0,
+      packagingCost: 0.45,
+      lossPct: 5,
+      prepTimeMin: 9,
+      targetMarginPct: 62,
+      notes: 'Bacon crocante na chapa. Dois discos de muçarela.',
+      items: {
+        create: [
+          { ingredientId: ing('Pão de Hambúrguer'), qty: 1 },
+          { ingredientId: ing('Hambúrguer Bovino 120g'), qty: 1 },
+          { ingredientId: ing('Bacon em Cubos'), qty: 0.05 },
+          { ingredientId: ing('Queijo Muçarela'), qty: 0.06 },
+          { ingredientId: ing('Molho Especial da Casa'), qty: 0.02 },
+        ],
+      },
+      modifiers: {
+        create: [
+          { name: 'Ovo extra', kind: 'ADDITION', ingredientId: ing('Ovos'), qty: 1, unit: 'UN', extraPrice: 2.5, sortOrder: 1 },
+          { name: 'Hambúrguer extra', kind: 'ADDITION', ingredientId: ing('Hambúrguer Bovino 120g'), qty: 1, unit: 'UN', extraPrice: 5.0, sortOrder: 2 },
+          { name: 'Sem cebola', kind: 'REMOVAL', sortOrder: 3 },
+        ],
+      },
+    },
+  })
+  await db.recipe.create({
+    data: {
+      name: 'Suco de Laranja 500ml',
+      productId: prod('Suco de Laranja 500ml'),
+      yieldQty: 1,
+      unit: 'UN',
+      laborCost: 0.9,
+      packagingCost: 0.28,
+      lossPct: 8,
+      prepTimeMin: 3,
+      targetMarginPct: 60,
+      notes: 'Laranja pera fresca, sem açúcar adicionado por padrão.',
+      items: {
+        create: [
+          { ingredientId: ing('Laranja Pera'), qty: 0.55 },
+          { ingredientId: ing('Açúcar Refinado'), qty: 0.02 },
+          { ingredientId: ing('Copo Plástico 500ml'), qty: 1 },
+        ],
+      },
+      modifiers: {
+        create: [
+          { name: 'Com açúcar', kind: 'ADDITION', ingredientId: ing('Açúcar Refinado'), qty: 0.015, unit: 'KG', sortOrder: 1 },
+          { name: 'Sem açúcar', kind: 'REMOVAL', ingredientId: ing('Açúcar Refinado'), qty: 0.02, unit: 'KG', sortOrder: 2 },
         ],
       },
     },
@@ -622,8 +738,8 @@ async function main() {
 
   // ---------- QUALIDADE / DESPERDÍCIO ----------
   console.log('Gerando registros de desperdício...')
-  const wasteData: { itemType: 'PRODUCT' | 'INGREDIENT'; itemName: string; productId?: string; ingredientId?: string; qty: number; unit: string; unitCost: number; reason: string; actor: string; notes?: string; created: Date }[] = [
-    { itemType: 'PRODUCT', itemName: 'Pão Francês', productId: prod('Pão Francês'), qty: 28, unit: 'UN', unitCost: 0.31, reason: 'VENCIDO', actor: 'Carlos Nunes', notes: 'Sobras do dia anterior', created: daysAgo(0, 7) },
+  const wasteData: { itemType: 'PRODUCT' | 'INGREDIENT'; itemName: string; productId?: string; ingredientId?: string; qty: number; unit: string; unitCost: number; reason: string; actor: string; sector?: string; lot?: string; notes?: string; created: Date }[] = [
+    { itemType: 'PRODUCT', itemName: 'Pão Francês', productId: prod('Pão Francês'), qty: 1.8, unit: 'KG', unitCost: 7.8, reason: 'VENCIDO', actor: 'Carlos Nunes', sector: 'PADARIA', lot: 'L2026-0427', notes: 'Sobras do dia anterior', created: daysAgo(0, 7) },
     { itemType: 'PRODUCT', itemName: 'Coxinha', productId: prod('Coxinha'), qty: 6, unit: 'UN', unitCost: 1.9, reason: 'QUEIMADO', actor: 'Marcos Padeiro', notes: 'Forno atrasou a temperatura', created: daysAgo(1, 11) },
     { itemType: 'INGREDIENT', itemName: 'Leite Integral', ingredientId: ing('Leite Integral'), qty: 4, unit: 'L', unitCost: 5.3, reason: 'VENCIDO', actor: 'Ana Estoque', notes: 'Lote vencido no fundo da câmara', created: daysAgo(2, 9) },
     { itemType: 'PRODUCT', itemName: 'Bolo de Chocolate', productId: prod('Bolo de Chocolate'), qty: 1, unit: 'UN', unitCost: 4.2, reason: 'ERRO_PRODUCAO', actor: 'Dona Cecília', notes: 'Massa não cresceu', created: daysAgo(3, 14) },
@@ -637,7 +753,8 @@ async function main() {
       data: {
         itemType: w.itemType, productId: w.productId ?? null, ingredientId: w.ingredientId ?? null,
         name: w.itemName, qty: w.qty, unit: w.unit, reason: w.reason,
-        cost: round2(w.unitCost * w.qty), actor: w.actor, notes: w.notes ?? null, createdAt: w.created,
+        cost: round2(w.unitCost * w.qty), actor: w.actor, sector: w.sector ?? null, lot: w.lot ?? null,
+        notes: w.notes ?? null, createdAt: w.created,
       },
     })
     await db.stockMovement.create({
@@ -1210,6 +1327,125 @@ async function main() {
   await db.fiscalConfig.update({
     where: { id: fiscalConfig.id },
     data: { nfceNextNumber: Math.max(nfceNumber, fiscalConfig.nfceNextNumber) },
+  })
+
+  // ---------- BALANÇAS COMERCIAIS (Fase 5) ----------
+  console.log('Configurando balanças, perfis de etiqueta e PLUs...')
+  const { encodeLabel } = await import('../src/lib/scales/barcode-interpreter')
+
+  const profileToledo = await db.scaleBarcodeProfile.create({
+    data: {
+      name: 'Toledo padrão — peso (EAN-13)',
+      brand: 'TOLEDO',
+      symbology: 'EAN13',
+      payloadType: 'WEIGHT',
+      prefix: '2',
+      pluDigits: 6,
+      payloadDigits: 5,
+      payloadDecimals: 3,
+      checkDigit: true,
+      description: 'Etiqueta de peso: prefixo 2 + PLU(6) + peso kg(5, 3 dec) + DV',
+    },
+  })
+  const profileFilizola = await db.scaleBarcodeProfile.create({
+    data: {
+      name: 'Filizola padrão — preço (EAN-13)',
+      brand: 'FILIZOLA',
+      symbology: 'EAN13',
+      payloadType: 'PRICE',
+      prefix: '22',
+      pluDigits: 5,
+      payloadDigits: 5,
+      payloadDecimals: 2,
+      checkDigit: true,
+      description: 'Etiqueta de preço: prefixo 22 + PLU(5) + valor R$(5, 2 dec) + DV',
+    },
+  })
+
+  const scaleDevice1 = await db.scaleDevice.create({
+    data: {
+      name: 'Balança Balcão 1 (simulada)',
+      brand: 'SIMULADOR',
+      model: 'Prix 3 Toledo (simulada)',
+      connectionType: 'SIMULATED',
+      profileId: profileToledo.id,
+      department: 'PADARIA',
+      status: 'ONLINE',
+      homologationStatus: 'HOMOLOGADO',
+      lastSyncAt: daysAgo(0, 6, 30),
+      lastCommunicationAt: daysAgo(0, 6, 32),
+      notes: 'Driver simulado para testes de ponta a ponta das regras de negócio.',
+    },
+  })
+  const scaleDevice2 = await db.scaleDevice.create({
+    data: {
+      name: 'Balança Confeitaria (simulada)',
+      brand: 'SIMULADOR',
+      model: 'Filizola MF (simulada)',
+      connectionType: 'SIMULATED',
+      profileId: profileFilizola.id,
+      department: 'CONFEITARIA',
+      status: 'ONLINE',
+      homologationStatus: 'HOMOLOGADO',
+      notes: 'Simulador com perfil de etiqueta por PREÇO (validação do formato Filizola).',
+    },
+  })
+
+  const mapping1 = await db.scaleProductMapping.create({
+    data: { deviceId: scaleDevice1.id, productId: prod('Pão Francês'), plu: '000123', description: 'PAO FRANCES KG', lastSentPrice: 14.9, lastSentAt: daysAgo(0, 6, 30) },
+  })
+  const mapping2 = await db.scaleProductMapping.create({
+    data: { deviceId: scaleDevice1.id, productId: prod('Bolo Aniversário Personalizado (kg)'), plu: '000124', description: 'BOLO ANIV (KG)', lastSentPrice: 66.0, lastSentAt: daysAgo(0, 6, 30) },
+  })
+  await db.scaleProductMapping.create({
+    data: { deviceId: scaleDevice2.id, productId: prod('Bolo Aniversário Personalizado (kg)'), plu: '00124', description: 'BOLO ANIV (KG)', lastSentPrice: 68.0, lastSentAt: daysAgo(1, 15) },
+  })
+  void mapping1
+  void mapping2
+  // Divergência proposital: preço do bolo mudou no ERP e a balança ficou desatualizada
+  await db.product.update({ where: { id: prod('Bolo Aniversário Personalizado (kg)') }, data: { price: 68.0 } })
+
+  await db.scaleSyncJob.create({
+    data: {
+      deviceId: scaleDevice1.id,
+      type: 'PRODUCTS',
+      status: 'SUCCESS',
+      total: 2,
+      ok: 2,
+      failed: 0,
+      detail: '2 produto(s) sincronizado(s), 0 falha(s)',
+      startedAt: daysAgo(0, 6, 30),
+      finishedAt: daysAgo(0, 6, 31),
+      items: {
+        create: [
+          { productId: prod('Pão Francês'), plu: '000123', status: 'OK', message: 'Cadastro confirmado' },
+          { productId: prod('Bolo Aniversário Personalizado (kg)'), plu: '000124', status: 'OK', message: 'Cadastro confirmado' },
+        ],
+      },
+    },
+  })
+
+  // Leituras de demonstração: etiquetas geradas + decodificadas pelo ciclo oficial
+  const label1 = encodeLabel({ payloadType: 'WEIGHT', prefix: '2', pluDigits: 6, payloadDigits: 5, payloadDecimals: 3, checkDigit: true }, '000123', 0.45)
+  const label2 = encodeLabel({ payloadType: 'PRICE', prefix: '22', pluDigits: 5, payloadDigits: 5, payloadDecimals: 2, checkDigit: true }, '00124', 27.2)
+  await db.scaleReading.createMany({
+    data: [
+      { deviceId: scaleDevice1.id, productId: prod('Pão Francês'), plu: '000123', weight: 0.45, unitPrice: 14.9, total: 6.71, raw: label1, source: 'SIMULATOR', stable: true, createdAt: daysAgo(0, 7, 12) },
+      { deviceId: scaleDevice1.id, productId: prod('Pão Francês'), plu: '000123', weight: 0.32, unitPrice: 14.9, total: 4.77, raw: label1, source: 'LABEL', stable: true, createdAt: daysAgo(0, 8, 3) },
+      { deviceId: scaleDevice2.id, productId: prod('Bolo Aniversário Personalizado (kg)'), plu: '00124', weight: 0.4, unitPrice: 68.0, total: 27.2, raw: label2, source: 'SIMULATOR', stable: true, createdAt: daysAgo(1, 15, 40) },
+    ],
+  })
+
+  await db.accessLog.create({
+    data: {
+      action: 'SCALE_SYNC',
+      actor: 'Ricardo Alves',
+      userId: null,
+      userEmail: null,
+      detail: `Balança Balcão 1: 2 produtos sincronizados (PLUs 00123, 00124)`,
+      ip: '192.168.0.10',
+      createdAt: daysAgo(0, 6, 30),
+    },
   })
 
   // ---------- ALERTAS ----------

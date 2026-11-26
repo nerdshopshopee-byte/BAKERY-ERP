@@ -8,10 +8,12 @@ import {
   Bike,
   Croissant,
   History,
+  Loader2,
   Minus,
   Plus,
   Printer,
   Receipt,
+  Scale,
   Search,
   ShoppingCart,
   Store,
@@ -59,7 +61,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 const PAY_METHODS = ['DINHEIRO', 'PIX', 'DEBITO', 'CREDITO', 'VALE', 'FIADO'] as const
 type PayMethod = (typeof PAY_METHODS)[number]
 
-type CartLine = { product: ProductDTO; qty: number }
+type CartLine = { product: ProductDTO; qty: number; fromScale?: boolean }
 type PaymentDraft = { id: string; method: PayMethod; amount: string }
 
 const round2 = (v: number) => Math.round(v * 100) / 100
@@ -97,6 +99,12 @@ export default function PdvView({ operator }: ViewProps) {
 
   // ---- catálogo ----
   const [search, setSearch] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [weighOpen, setWeighOpen] = useState(false)
+  const [weighProduct, setWeighProduct] = useState<ProductDTO | null>(null)
+  const [weighWeight, setWeighWeight] = useState('')
+  const [weighResult, setWeighResult] = useState<{ qty: number; total: number; label: string } | null>(null)
+  const [weighBusy, setWeighBusy] = useState(false)
   const [catFilter, setCatFilter] = useState<string>('all')
 
   // ---- carrinho ----
@@ -198,18 +206,109 @@ export default function PdvView({ operator }: ViewProps) {
   }, [cashReceived, total])
 
   // ---- carrinho ----
-  function addToCart(product: ProductDTO) {
+  function addToCart(product: ProductDTO, qtyOverride?: number, fromScale?: boolean) {
     setCart((prev) => {
       const existing = prev.find((l) => l.product.id === product.id)
-      if (existing) {
+      if (existing && qtyOverride === undefined) {
         return prev.map((l) =>
           l.product.id === product.id
             ? { ...l, qty: round2(l.qty + (product.byWeight ? 0.5 : 1)) }
             : l,
         )
       }
-      return [...prev, { product, qty: product.byWeight ? 0.5 : 1 }]
+      if (existing && qtyOverride !== undefined) {
+        return prev.map((l) =>
+          l.product.id === product.id ? { ...l, qty: round2(l.qty + qtyOverride), fromScale: true } : l,
+        )
+      }
+      return [...prev, { product, qty: qtyOverride ?? (product.byWeight ? 0.5 : 1), fromScale }]
     })
+  }
+
+  // ---- etiqueta de balança / leitor de código ----
+  const lastScanRef = useRef<{ code: string; at: number } | null>(null)
+  async function handleScan() {
+    const code = search.trim()
+    if (!code || !/\d/.test(code)) return
+
+    // Impede lançamento duplicado por leitura repetida indevida (3s)
+    const now = Date.now()
+    if (lastScanRef.current && lastScanRef.current.code === code && now - lastScanRef.current.at < 3000) {
+      toast.warning('Etiqueta já lançada há poucos segundos — leitura duplicada ignorada')
+      return
+    }
+    lastScanRef.current = { code, at: now }
+
+    setScanning(true)
+    try {
+      const result = await apiPost<{
+        kind: string
+        product: ProductDTO
+        qty: number
+        unitPrice: number
+        total: number
+      }>('/api/scales/decode', { code })
+
+      // Mescla com o catálogo carregado para garantir todos os campos (preço, custo, kitchen)
+      const catalog = products.find((p) => p.id === result.product.id)
+      const product: ProductDTO = catalog
+        ? catalog
+        : {
+            ...result.product,
+            price: result.unitPrice,
+            cost: result.product.cost ?? 0,
+            unit: result.product.saleUnit ?? 'UN',
+            active: true,
+          }
+
+      addToCart(product, result.qty, result.kind === 'SCALE_LABEL')
+      if (result.kind === 'SCALE_LABEL') {
+        toast.success(
+          `${product.name}: ${result.qty.toFixed(3).replace('.', ',')} kg × ${brl(result.unitPrice)} = ${brl(result.total)}`,
+        )
+      } else {
+        toast.success(`${product.name} adicionado`)
+      }
+      setSearch('')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao interpretar o código')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  // ---- pesagem direta no caixa (balança compatível) ----
+  function openWeighDialog(product: ProductDTO) {
+    setWeighProduct(product)
+    setWeighWeight('')
+    setWeighResult(null)
+    setWeighOpen(true)
+  }
+
+  async function runWeigh() {
+    if (!weighProduct) return
+    setWeighBusy(true)
+    setWeighResult(null)
+    try {
+      const result = await apiPost<{ qty: number; total: number; label: string }>('/api/scales/simulate', {
+        productId: weighProduct.id,
+        weight: weighWeight.trim() ? Number(weighWeight.replace(',', '.')) : undefined,
+      })
+      setWeighResult(result)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha na pesagem')
+    } finally {
+      setWeighBusy(false)
+    }
+  }
+
+  function confirmWeigh() {
+    if (!weighProduct || !weighResult) return
+    addToCart(weighProduct, weighResult.qty, true)
+    toast.success(
+      `${weighProduct.name}: ${weighResult.qty.toFixed(3).replace('.', ',')} kg = ${brl(weighResult.total)}`,
+    )
+    setWeighOpen(false)
   }
 
   function setQty(productId: string, qty: number) {
@@ -341,7 +440,10 @@ export default function PdvView({ operator }: ViewProps) {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar produto ou código de barras..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleScan()
+              }}
+              placeholder="Buscar produto, código de barras ou etiqueta de balança (Enter)..."
               className="pl-9"
             />
           </div>
@@ -400,7 +502,11 @@ export default function PdvView({ operator }: ViewProps) {
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => addToCart(p)}
+                  onClick={() =>
+                    p.isWeighable || (p.byWeight && p.isWeighable !== false && p.isWeighable !== undefined)
+                      ? openWeighDialog(p)
+                      : addToCart(p)
+                  }
                   className="rounded-xl border bg-card text-left transition-transform duration-100 active:scale-95"
                 >
                   <ProductThumb src={p.categoryImageUrl} alt={p.name} />
@@ -412,7 +518,9 @@ export default function PdvView({ operator }: ViewProps) {
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs text-muted-foreground">Custo {brl(p.cost)}</span>
-                      {p.byWeight ? <Badge variant="secondary">KG</Badge> : null}
+                      {p.byWeight ? (
+                        <Badge variant="secondary">{p.isWeighable ? 'PESAR' : 'KG'}</Badge>
+                      ) : null}
                     </div>
                   </div>
                 </button>
@@ -833,6 +941,65 @@ export default function PdvView({ operator }: ViewProps) {
               ))
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pesagem direta no caixa (balança compatível / simulador) */}
+      <Dialog open={weighOpen} onOpenChange={setWeighOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pesagem direta — {weighProduct?.name}</DialogTitle>
+            <DialogDescription>
+              Coloque o item na balança e aguarde leitura estável, ou digite o peso
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border bg-muted/40 p-4 text-center">
+              <p className="text-3xl font-bold tabular-nums">
+                {weighResult ? `${weighResult.qty.toFixed(3).replace('.', ',')} kg` : weighWeight ? `${weighWeight} kg` : '— — —'}
+              </p>
+              {weighResult && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {brl(weighProduct?.price ?? 0)}/kg · total{' '}
+                  <span className="font-semibold text-foreground">
+                    {brl(weighResult.total)}
+                  </span>{' '}
+                  · leitura estável
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="w-weight">Peso (kg)</Label>
+                <Input
+                  id="w-weight"
+                  inputMode="decimal"
+                  value={weighWeight}
+                  onChange={(e) => setWeighWeight(e.target.value)}
+                  placeholder="Ex.: 0,450"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" className="w-full" onClick={() => void runWeigh()} disabled={weighBusy}>
+                  {weighBusy ? <Loader2 className="size-4 animate-spin" /> : <Scale className="size-4" />}
+                  Ler balança
+                </Button>
+              </div>
+            </div>
+            {weighResult?.label && (
+              <p className="text-center font-mono text-xs text-muted-foreground">
+                Etiqueta gerada: {weighResult.label}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWeighOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmWeigh} disabled={!weighResult}>
+              Adicionar ao carrinho
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

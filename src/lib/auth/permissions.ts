@@ -157,6 +157,16 @@ export const PERMISSION_MODULES: PermissionModuleDef[] = [
     ],
   },
   {
+    key: 'scales',
+    label: 'Balanças',
+    description: 'Equipamentos de pesagem, PLUs e etiquetas',
+    permissions: [
+      { key: 'scales.view', label: 'Visualizar balanças e PLUs' },
+      { key: 'scales.manage', label: 'Cadastrar e editar equipamentos' },
+      { key: 'scales.sync', label: 'Sincronizar produtos e ler peso' },
+    ],
+  },
+  {
     key: 'settings',
     label: 'Configurações',
     description: 'Usuários, perfis e administração',
@@ -207,5 +217,6 @@ export const MODULE_PERMISSION: Record<string, string> = {
   customers: 'customers.view',
   payments: 'finance.payments',
   fiscal: 'fiscal.view',
+  scales: 'scales.view',
   settings: 'settings.view',
 }

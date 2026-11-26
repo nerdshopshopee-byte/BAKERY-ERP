@@ -1,10 +1,12 @@
 // BAKERY ERP - API de receitas
-// GET  /api/recipes -> lista com items enriquecidos e custos computados (totalCost, costPerUnit)
+// GET  /api/recipes -> lista com items enriquecidos, custos computados,
+//                      ficha técnica completa (margem, preço sugerido) e modificadores
 // POST /api/recipes -> cria receita com items (create aninhado de RecipeItem)
 
 import { type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { guardApi } from '@/lib/auth/guard'
+import { computeFichaTecnica } from '@/lib/recipes'
 
 // Sempre executa no request (evita cache estático no build)
 export const dynamic = 'force-dynamic'
@@ -29,12 +31,17 @@ export async function GET(request: NextRequest) {
   const g = await guardApi(request, 'production.recipes.view')
   if (!g.ok) return g.response
 
-  const [recipes, ingredients] = await Promise.all([
-    db.recipe.findMany({ include: { items: true }, orderBy: { name: 'asc' } }),
+  const [recipes, ingredients, products] = await Promise.all([
+    db.recipe.findMany({
+      include: { items: true, modifiers: { orderBy: { sortOrder: 'asc' } }, costSnapshots: { orderBy: { createdAt: 'desc' }, take: 10 } },
+      orderBy: { name: 'asc' },
+    }),
     db.ingredient.findMany(),
+    db.product.findMany({ select: { id: true, name: true, price: true, saleUnit: true } }),
   ])
 
   const ingredientMap = new Map(ingredients.map((i) => [i.id, i]))
+  const productMap = new Map(products.map((p) => [p.id, p]))
 
   const result = recipes.map((recipe) => {
     const items = recipe.items.map((item) => {
@@ -50,13 +57,31 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const ingredientsCost = round2(
-      items.reduce((acc, item) => acc + item.qty * (item.costPerUnit ?? 0), 0),
-    )
-    const totalCost = round2(ingredientsCost + recipe.laborCost)
-    const costPerUnit = recipe.yieldQty > 0 ? round2(totalCost / recipe.yieldQty) : 0
+    const linkedProduct = recipe.productId ? productMap.get(recipe.productId) : null
+    const ficha = computeFichaTecnica({
+      recipe,
+      items: recipe.items,
+      ingredients,
+      modifiers: recipe.modifiers,
+      salePrice: linkedProduct?.price ?? null,
+    })
 
-    return { ...recipe, items, totalCost, costPerUnit }
+    return {
+      ...recipe,
+      items,
+      totalCost: ficha.totalCost,
+      costPerUnit: ficha.costPerUnit,
+      ficha,
+      modifiers: recipe.modifiers.map((m) => {
+        const ing = m.ingredientId ? ingredientMap.get(m.ingredientId) : null
+        return {
+          ...m,
+          ingredientName: ing?.name ?? null,
+          computedCost: m.ingredientId && ing ? m.qty * ing.costPerUnit : m.extraCost,
+        }
+      }),
+      productName: linkedProduct?.name ?? null,
+    }
   })
 
   return Response.json(result)

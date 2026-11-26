@@ -24,20 +24,30 @@ model Category {
 }
 
 model Product {
-  id         String   @id @default(cuid())
-  name       String
-  categoryId String?
-  unit       String   @default("UN") // UN | KG
-  price      Float    @default(0)
-  cost       Float    @default(0)
-  barcode    String?
-  byWeight   Boolean  @default(false)
-  isKitchen  Boolean  @default(true) // passa pelo KDS/produção
-  ncm        String?  // NCM fiscal (padrão da padaria quando nulo)
-  active     Boolean  @default(true)
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  categoryId      String?
+  unit            String   @default("UN") // UN | KG
+  saleUnit        String   @default("UN") // UN | KG | G | L | ML (unidade de venda/pesagem)
+  price           Float    @default(0) // preço por unidade de venda (ex.: R$/kg)
+  cost            Float    @default(0)
+  barcode         String?
+  plu             String?  // código PLU enviado às balanças (único quando preenchido)
+  byWeight        Boolean  @default(false)
+  isWeighable     Boolean  @default(false) // pesável: etiqueta de balança, tara, validade
+  tara            Float    @default(0) // tara em gramas
+  shelfLifeDays   Int?     // validade em dias (etiqueta e lote)
+  lotControl      Boolean  @default(false)
+  weighDepartment String?  // setor/departamento de pesagem
+  trackStock      Boolean  @default(false) // baixa estoque do produto pronto na venda
+  stock           Float    @default(0) // estoque do produto (unidade de venda)
+  minStock        Float    @default(0)
+  isKitchen       Boolean  @default(true) // passa pelo KDS/produção
+  ncm             String?  // NCM fiscal (padrão da padaria quando nulo)
+  active          Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ============ INSUMOS / ESTOQUE ============
@@ -70,16 +80,22 @@ model StockMovement {
 // ============ RECEITAS / PRODUÇÃO ============
 
 model Recipe {
-  id        String       @id @default(cuid())
-  name      String
-  productId String?
-  yieldQty  Float        @default(1) // rendimento
-  unit      String       @default("UN")
-  laborCost Float        @default(0) // custo de mão de obra/energia por lote
-  notes     String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  items     RecipeItem[] // declarativo; Prisma gera FK automática
+  id            String             @id @default(cuid())
+  name          String
+  productId     String?
+  yieldQty      Float              @default(1) // rendimento do lote
+  unit          String             @default("UN")
+  laborCost     Float              @default(0) // custo de mão de obra/energia por lote
+  packagingCost Float              @default(0) // custo de embalagem por lote
+  lossPct       Float              @default(0) // perda prevista (%)
+  prepTimeMin   Int?               // tempo de preparo (min)
+  targetMarginPct Float?           // margem alvo (%) para preço sugerido
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  items         RecipeItem[]       // declarativo; Prisma gera FK automática
+  modifiers     RecipeModifier[]
+  costSnapshots RecipeCostSnapshot[]
 }
 
 model RecipeItem {
@@ -91,18 +107,25 @@ model RecipeItem {
 }
 
 model ProductionOrder {
-  id          String    @id @default(cuid())
+  id          String                 @id @default(cuid())
   code        String
   recipeId    String
   recipeName  String
   plannedQty  Float
   producedQty Float?
-  status      String    @default("PLANEJADA") // PLANEJADA | EM_ANDAMENTO | CONCLUIDA | CANCELADA
+  status      String                 @default("PLANEJADA") // PLANEJADA | EM_ANDAMENTO | CONCLUIDA | CANCELADA
   operator    String?
   notes       String?
+  batchCode   String?                // lote da produção
+  lossQty     Float                  @default(0) // perdas do lote (unidade do produto)
+  plannedCost Float?                 // custo teórico previsto (ficha técnica)
+  realCost    Float?                 // custo real (consumo efetivo + mão de obra + embalagem)
+  shelfLifeDays Int?                 // validade do lote produzido
+  branchId    String?                // filial de produção
   startedAt   DateTime?
   finishedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime               @default(now())
+  consumption ProductionConsumption[]
 }
 
 // ============ COMPRAS ============
@@ -143,7 +166,53 @@ model PurchaseItem {
   purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 }
 
-// ============ CLIENTES ============
+// Consumo real de insumos por ordem de produção (previsto vs efetivo)
+model ProductionConsumption {
+  id           String          @id @default(cuid())
+  orderId      String
+  ingredientId String
+  name         String          // snapshot do insumo
+  unit         String          @default("UN")
+  plannedQty   Float           @default(0) // previsto pela ficha técnica
+  actualQty    Float           @default(0) // efetivamente consumido
+  unitCost     Float           @default(0) // custo unitário no momento
+  cost         Float           @default(0) // actualQty * unitCost
+  order        ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, ingredientId])
+}
+
+// Histórico de custos da ficha técnica (análise financeira)
+model RecipeCostSnapshot {
+  id          String   @id @default(cuid())
+  recipeId    String
+  totalCost   Float    @default(0) // custo total do lote no momento
+  costPerUnit Float    @default(0)
+  source      String   @default("AUTO") // AUTO | MANUAL | PRODUCAO
+  detail      String?  // composição resumida (ingredientes + custos)
+  createdAt   DateTime @default(now())
+  recipe      Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
+
+// Modificadores do produto preparado: adicionais, retiradas e opções
+// (bacon extra, sem tomate, tamanho, ponto da carne...)
+model RecipeModifier {
+  id           String   @id @default(cuid())
+  recipeId     String?
+  productId    String?  // alternativa: modificador direto no produto (sem receita)
+  name         String   // "Bacon extra", "Sem tomate", "Tamanho grande"
+  kind         String   @default("ADDITION") // ADDITION | REMOVAL | OPTION
+  ingredientId String?  // insumo impactado (consumo/estorno)
+  qty          Float    @default(0) // quantidade do insumo por adicional
+  unit         String   @default("UN")
+  extraCost    Float    @default(0) // custo adicional (default: qty * costPerUnit)
+  extraPrice   Float    @default(0) // preço adicional cobrado
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  recipe       Recipe?  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
 
 model Customer {
   id            String   @id @default(cuid())
@@ -582,11 +651,124 @@ model WasteRecord {
   name         String
   qty          Float     @default(0)
   unit         String?
-  reason       String    @default("OUTROS") // VENCIDO | QUEIMADO | ERRO_PRODUCAO | DEVOLUCAO | OUTROS
+  reason       String    @default("OUTROS") // VENCIDO | QUEIMADO | ERRO_PRODUCAO | DEVOLUCAO | DANIFICADO | SOBRA | DESCARTE | OUTROS
   cost         Float     @default(0)
   actor        String?
+  sector       String?   // setor responsável (produção, balcão, confeitaria...)
+  lot          String?   // lote vinculado
+  refOrderId   String?   // ordem de produção de origem, quando aplicável
+  photoUrl     String?
   notes        String?
   createdAt    DateTime  @default(now())
+}
+
+// ============ BALANÇAS COMERCIAIS (Fase 5) ============
+// Arquitetura de adaptadores: cada marca/modelo é homologado via perfil de
+// etiqueta + driver de exportação; comunicação direta fica na BRIDGE local.
+
+// Perfil de interpretação de etiquetas (padrão de código de barras da balança)
+model ScaleBarcodeProfile {
+  id              String   @id @default(cuid())
+  name            String
+  brand           String   @default("GENERIC") // TOLEDO | FILIZOLA | URANO | BALMAK | RAMUZA | GENERIC
+  symbology       String   @default("EAN13") // EAN13 | CODE128
+  payloadType     String   @default("WEIGHT") // WEIGHT | PRICE (o que o campo variável carrega)
+  prefix          String   @default("2") // dígitos iniciais identificadores de etiqueta de balança
+  pluDigits       Int      @default(5)
+  payloadDigits   Int      @default(5)
+  payloadDecimals Int      @default(3) // casas decimais: peso em kg (3) ou preço (2)
+  checkDigit      Boolean  @default(true) // validar dígito verificador EAN-13
+  description     String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  devices         ScaleDevice[]
+}
+
+// Equipamento cadastrado (balança etiquetadora/computadora)
+model ScaleDevice {
+  id                   String    @id @default(cuid())
+  name                 String
+  brand                String    @default("GENERIC")
+  model                String?
+  connectionType       String    @default("SIMULATED") // SIMULATED | SERIAL | ETHERNET | FILE | BRIDGE
+  connectionConfig     String?   // JSON: {ip, port, serialPort, baudRate, parity, stopBits, bridgeUrl, software}
+  profileId            String?   // perfil de etiqueta
+  branchId             String?   // filial
+  department           String?   // setor de pesagem
+  status               String    @default("OFFLINE") // ONLINE | OFFLINE | ERROR | DISABLED
+  lastSyncAt           DateTime?
+  lastCommunicationAt  DateTime?
+  lastError            String?
+  homologationStatus   String    @default("PLANEJADO") // PLANEJADO | EM_DESENVOLVIMENTO | TESTADO | HOMOLOGADO | INCOMPATIVEL
+  active               Boolean   @default(true)
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  profile              ScaleBarcodeProfile? @relation(fields: [profileId], references: [id])
+  mappings             ScaleProductMapping[]
+  syncJobs             ScaleSyncJob[]
+  readings             ScaleReading[]
+}
+
+// Associação produto x PLU por equipamento + estado da sincronização de preço
+model ScaleProductMapping {
+  id            String    @id @default(cuid())
+  deviceId      String
+  productId     String
+  plu           String
+  description   String?   // descrição enviada ao equipamento (pode ser truncada)
+  lastSentPrice Float?
+  lastSentAt    DateTime?
+  divergence    Boolean   @default(false) // preço do ERP difere do enviado
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  device        ScaleDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, plu])
+  @@unique([deviceId, productId])
+}
+
+// Histórico de sincronizações (envio de cadastro de produtos)
+model ScaleSyncJob {
+  id         String          @id @default(cuid())
+  deviceId   String
+  type       String          @default("PRODUCTS") // PRODUCTS | CONFIG
+  status     String          @default("RUNNING") // RUNNING | SUCCESS | PARTIAL | FAILED
+  total      Int             @default(0)
+  ok         Int             @default(0)
+  failed     Int             @default(0)
+  detail     String?
+  startedAt  DateTime        @default(now())
+  finishedAt DateTime?
+  device     ScaleDevice     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  items      ScaleSyncItem[]
+}
+
+model ScaleSyncItem {
+  id         String        @id @default(cuid())
+  jobId      String
+  productId  String
+  plu        String
+  status     String        @default("OK") // OK | ERROR
+  message    String?
+  job        ScaleSyncJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+// Leituras de peso/etiquetas auditáveis (origem: simulador, bridge ou etiqueta)
+model ScaleReading {
+  id         String      @id @default(cuid())
+  deviceId   String?
+  productId  String?
+  plu        String?
+  weight     Float       @default(0) // kg
+  unitPrice  Float       @default(0)
+  total      Float       @default(0)
+  raw        String?     // código de barras lido, quando etiqueta
+  source     String      @default("SIMULATOR") // SIMULATOR | BRIDGE | LABEL | MANUAL
+  stable     Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  device     ScaleDevice? @relation(fields: [deviceId], references: [id])
 }
 
 // ============ MOTOR FISCAL (Fase 4 - Etapa 06) ============

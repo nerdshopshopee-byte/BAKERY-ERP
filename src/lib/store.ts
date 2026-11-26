@@ -46,4 +46,5 @@ export type ModuleKey =
   | 'employees'
   | 'customers'
   | 'payments'
+  | 'scales'
   | 'settings'

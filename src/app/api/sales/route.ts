@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
                 name: product ? product.name : 'Produto',
                 qty: item.qty,
                 unitPrice: product ? product.price : 0,
-                unit: product ? product.unit : 'UN',
+                unit: product ? product.saleUnit || product.unit : 'UN',
                 subtotal: subtotalOf(item.productId, item.qty),
               }
             }),
@@ -292,6 +292,28 @@ export async function POST(request: NextRequest) {
                 }
               }),
             },
+          },
+        })
+      }
+
+      // Baixa de estoque do PRODUTO PRONTO na venda (idempotente: está na mesma
+      // transação da venda; refId = sale.id). Produtos produzidos via OP já
+      // entraram no estoque pelo movimento PRODUCAO — não se desconta insumo aqui.
+      for (const item of normalizedItems) {
+        const product = productMap.get(item.productId)
+        if (!product?.trackStock) continue
+        await tx.product.update({
+          where: { id: product.id },
+          data: { stock: { decrement: item.qty } },
+        })
+        await tx.stockMovement.create({
+          data: {
+            itemType: 'PRODUCT',
+            productId: product.id,
+            type: 'VENDA',
+            qty: -item.qty,
+            refId: created.id,
+            reason: `Venda ${code}`,
           },
         })
       }

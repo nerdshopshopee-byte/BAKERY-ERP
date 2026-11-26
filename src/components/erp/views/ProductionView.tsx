@@ -142,6 +142,10 @@ export default function ProductionView({ operator }: ViewProps) {
   // concluir ordem
   const [completeTarget, setCompleteTarget] = useState<ProductionOrderDTO | null>(null)
   const [producedQty, setProducedQty] = useState('')
+  const [lossQty, setLossQty] = useState('')
+  const [batchCode, setBatchCode] = useState('')
+  const [shelfLifeDays, setShelfLifeDays] = useState('')
+  const [consumptionDraft, setConsumptionDraft] = useState<Array<{ ingredientId: string; actualQty: string }>>([])
   const [completing, setCompleting] = useState(false)
 
   // cancelar ordem
@@ -236,6 +240,10 @@ export default function ProductionView({ operator }: ViewProps) {
     return products.find((p) => p.id === productId)?.name ?? 'Produto removido'
   }
 
+  function ingredientName(ingredientId: string): string {
+    return ingredients.find((i) => i.id === ingredientId)?.name ?? 'Insumo'
+  }
+
   // ---- ordens ----
   async function createOrder() {
     const plannedQty = parseNum(orderForm.plannedQty)
@@ -282,6 +290,27 @@ export default function ProductionView({ operator }: ViewProps) {
   function openComplete(order: ProductionOrderDTO) {
     setCompleteTarget(order)
     setProducedQty(String(order.plannedQty))
+    setLossQty('')
+    setBatchCode('')
+    setShelfLifeDays('')
+    // Consumo real pré-preenchido com o previsto (proporcional à produção planejada)
+    void (async () => {
+      try {
+        const recipes = await apiGet<Array<{
+          id: string
+          yieldQty: number
+          items: Array<{ ingredientId: string; qty: number }>
+        }>>('/api/recipes')
+        const recipe = recipes.find((r) => r.id === order.recipeId)
+        if (!recipe) return
+        const factor = order.plannedQty / (recipe.yieldQty || 1)
+        setConsumptionDraft(
+          recipe.items.map((item) => ({ ingredientId: item.ingredientId, actualQty: String(round2(item.qty * factor)) })),
+        )
+      } catch {
+        setConsumptionDraft([])
+      }
+    })()
   }
 
   async function confirmComplete() {
@@ -297,8 +326,17 @@ export default function ProductionView({ operator }: ViewProps) {
         action: 'complete',
         producedQty: qty,
         operator: operator.name,
+        lossQty: lossQty.trim() ? parseNum(lossQty) : 0,
+        batchCode: batchCode.trim() || null,
+        shelfLifeDays: shelfLifeDays.trim() ? parseNum(shelfLifeDays) : null,
+        consumption: consumptionDraft.map((entry) => ({
+          ingredientId: entry.ingredientId,
+          actualQty: parseNum(entry.actualQty),
+        })),
       })
-      toast.success(`Ordem ${completeTarget.code} concluída · insumos deduzidos do estoque`)
+      toast.success(
+        `Ordem ${completeTarget.code} concluída · consumo real registrado · estoque atualizado`,
+      )
       setCompleteTarget(null)
       await loadOrders()
     } catch (err) {
@@ -682,24 +720,86 @@ export default function ProductionView({ operator }: ViewProps) {
         open={completeTarget !== null}
         onOpenChange={(open) => !open && setCompleteTarget(null)}
       >
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Concluir ordem {completeTarget?.code ?? ''}</DialogTitle>
             <DialogDescription>
-              Os insumos da receita serão deduzidos do estoque e a produção será registrada.
+              Ajuste o consumo real de cada insumo. O custo previsto x real será calculado
+              automaticamente e o estoque do produto será atualizado.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-1.5">
-            <Label htmlFor="op-produced">Quantidade produzida</Label>
-            <Input
-              id="op-produced"
-              type="number"
-              min={0.1}
-              step={0.1}
-              value={producedQty}
-              onChange={(e) => setProducedQty(e.target.value)}
-              className="text-right tabular-nums"
-            />
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="op-produced">Quantidade produzida</Label>
+                <Input
+                  id="op-produced"
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={producedQty}
+                  onChange={(e) => setProducedQty(e.target.value)}
+                  className="text-right tabular-nums"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="op-loss">Perdas</Label>
+                <Input
+                  id="op-loss"
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={lossQty}
+                  onChange={(e) => setLossQty(e.target.value)}
+                  placeholder="0"
+                  className="text-right tabular-nums"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="op-batch">Lote</Label>
+                <Input
+                  id="op-batch"
+                  value={batchCode}
+                  onChange={(e) => setBatchCode(e.target.value)}
+                  placeholder="Ex.: L2026-0428"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="op-shelf">Validade (dias)</Label>
+                <Input
+                  id="op-shelf"
+                  type="number"
+                  min={1}
+                  value={shelfLifeDays}
+                  onChange={(e) => setShelfLifeDays(e.target.value)}
+                  placeholder="Ex.: 1"
+                />
+              </div>
+            </div>
+            {consumptionDraft.length > 0 && (
+              <div className="rounded-lg border p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Consumo real de insumos
+                </p>
+                {consumptionDraft.map((entry, index) => (
+                  <div key={entry.ingredientId} className="grid grid-cols-[1fr_120px] items-center gap-2">
+                    <span className="truncate text-sm">{ingredientName(entry.ingredientId)}</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={entry.actualQty}
+                      onChange={(e) =>
+                        setConsumptionDraft((prev) =>
+                          prev.map((item, i) => (i === index ? { ...item, actualQty: e.target.value } : item)),
+                        )
+                    }
+                      className="text-right tabular-nums"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -778,6 +878,18 @@ export default function ProductionView({ operator }: ViewProps) {
                   <span>Mão de obra</span>
                   <span className="tabular-nums">{brl(detailRecipe.laborCost)}</span>
                 </div>
+                {detailRecipe.packagingCost > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Embalagem</span>
+                    <span className="tabular-nums">{brl(detailRecipe.packagingCost)}</span>
+                  </div>
+                )}
+                {detailRecipe.lossPct > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Perda prevista ({detailRecipe.lossPct}%)</span>
+                    <span className="tabular-nums">{brl(detailRecipe.ficha?.lossCost ?? 0)}</span>
+                  </div>
+                )}
                 <Separator className="my-1" />
                 <div className="flex justify-between font-medium">
                   <span>Custo total do lote</span>
@@ -788,6 +900,116 @@ export default function ProductionView({ operator }: ViewProps) {
                   <span className="text-primary tabular-nums">{brl(detailRecipe.costPerUnit)}</span>
                 </div>
               </div>
+
+              {/* Margem e preço sugerido */}
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Resultado por unidade
+                </p>
+                {detailRecipe.ficha?.salePrice != null ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Preço de venda</span>
+                      <span className="tabular-nums">{brl(detailRecipe.ficha.salePrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Margem de contribuição</span>
+                      <span
+                        className={`tabular-nums font-semibold ${
+                          (detailRecipe.ficha.marginPerUnit ?? 0) < 0 ? 'text-destructive' : 'text-emerald-500'
+                        }`}
+                      >
+                        {brl(detailRecipe.ficha.marginPerUnit ?? 0)} (
+                        {detailRecipe.ficha.marginPct?.toFixed(1).replace('.', ',')}%)
+                      </span>
+                    </div>
+                    {detailRecipe.ficha.suggestedPrice != null && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          Preço sugerido (margem alvo {detailRecipe.ficha.targetMarginPct}%)
+                        </span>
+                        <span className="tabular-nums">{brl(detailRecipe.ficha.suggestedPrice)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Vincule um produto à receita para calcular margem e preço sugerido.
+                  </p>
+                )}
+                {(detailRecipe.modifiers?.length ?? 0) > 0 && (
+                  <div className="flex justify-between border-t pt-1">
+                    <span className="text-muted-foreground">
+                      Modificadores (custo extra/un, somado às escolhas)
+                    </span>
+                    <span className="tabular-nums">
+                      {brl(detailRecipe.ficha?.modifierCostsTotal ?? 0)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Modificadores: adicionais, retiradas e opções */}
+              {(detailRecipe.modifiers?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Adicionais e modificadores
+                  </p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Insumo</TableHead>
+                        <TableHead className="text-right">Custo</TableHead>
+                        <TableHead className="text-right">Preço</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detailRecipe.modifiers.map((modifier) => (
+                        <TableRow key={modifier.id}>
+                          <TableCell className="font-medium">
+                            {modifier.name}
+                            {!modifier.active && (
+                              <Badge variant="outline" className="ml-1">
+                                inativo
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={
+                                modifier.kind === 'ADDITION'
+                                  ? 'text-emerald-500'
+                                  : modifier.kind === 'REMOVAL'
+                                    ? 'text-destructive'
+                                    : 'text-muted-foreground'
+                              }
+                            >
+                              {modifier.kind === 'ADDITION'
+                                ? 'adicional'
+                                : modifier.kind === 'REMOVAL'
+                                  ? 'retirada'
+                                  : 'opção'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {modifier.ingredientName ?? '—'}
+                            {modifier.qty > 0 && ` ${fmtQty(modifier.qty)} ${modifier.unit}`}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {brl(modifier.computedCost ?? modifier.extraCost)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {brl(modifier.extraPrice)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
 
               {detailRecipe.notes ? (
                 <p className="text-xs text-muted-foreground">Notas: {detailRecipe.notes}</p>

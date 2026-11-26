@@ -31,7 +31,7 @@ import { apiGet } from '@/lib/api'
 import { brl, num, pct } from '@/lib/format'
 import type { ViewProps } from '@/components/erp/view-props'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -79,16 +79,42 @@ const PERIODS = [
 
 // ============ View ============
 
+interface ProfitabilityRow {
+  productId: string
+  name: string
+  saleUnit: string
+  unitPrice: number
+  unitCost: number
+  soldQty: number
+  revenue: number
+  theoryCost: number
+  wasteCost: number
+  margin: number
+  marginPct: number | null
+  hasRecipe: boolean
+}
+
+interface ProfitabilityPayload {
+  periodDays: number
+  totals: { revenue: number; cost: number; waste: number; margin: number; marginPct: number | null }
+  rows: ProfitabilityRow[]
+}
+
 export default function ReportsView({ operator }: ViewProps) {
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState<number>(30)
   const [report, setReport] = useState<ReportSummaryDTO | null>(null)
+  const [profitability, setProfitability] = useState<ProfitabilityPayload | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await apiGet<ReportSummaryDTO>(`/api/reports/summary?days=${days}`)
+      const [data, profit] = await Promise.all([
+        apiGet<ReportSummaryDTO>(`/api/reports/summary?days=${days}`),
+        apiGet<ProfitabilityPayload>(`/api/reports/profitability?days=${days}`),
+      ])
       setReport(data)
+      setProfitability(profit)
     } catch (err) {
       toast.error('Erro ao carregar relatórios', { description: err instanceof Error ? err.message : undefined })
     } finally {
@@ -419,6 +445,89 @@ export default function ReportsView({ operator }: ViewProps) {
                   </div>
                 ) : (
                   <p className="text-muted-foreground py-10 text-center text-sm">Nenhuma perda registrada no período.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Rentabilidade por produto (ficha técnica real) */}
+            <Card className="rounded-xl border bg-card md:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Rentabilidade por produto (custo real da ficha técnica)</CardTitle>
+                <CardDescription>
+                  Margem após custo teórico dos ingredientes, mão de obra, embalagem e desperdício
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                {profitability && profitability.rows.length > 0 ? (
+                  <>
+                    <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Receita</p>
+                        <p className="text-lg font-semibold tabular-nums">{brl(profitability.totals.revenue)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Custo teórico</p>
+                        <p className="text-lg font-semibold tabular-nums">{brl(profitability.totals.cost)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Desperdício</p>
+                        <p className="text-lg font-semibold tabular-nums text-destructive">{brl(profitability.totals.waste)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Margem</p>
+                        <p className="text-lg font-semibold tabular-nums text-emerald-400">
+                          {brl(profitability.totals.margin)} ({profitability.totals.marginPct?.toFixed(1).replace('.', ',')}%)
+                        </p>
+                      </div>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Produto</TableHead>
+                          <TableHead className="text-right">Vendido</TableHead>
+                          <TableHead className="text-right">Receita</TableHead>
+                          <TableHead className="text-right">Custo/un.</TableHead>
+                          <TableHead className="text-right">Custo total</TableHead>
+                          <TableHead className="text-right">Desperdício</TableHead>
+                          <TableHead className="text-right">Margem</TableHead>
+                          <TableHead className="text-right">Margem %</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {profitability.rows.slice(0, 12).map((row) => (
+                          <TableRow key={row.productId}>
+                            <TableCell>
+                              <p className="font-medium">{row.name}</p>
+                              {row.hasRecipe && (
+                                <Badge variant="outline" className="mt-0.5">ficha técnica</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.saleUnit === 'KG' || row.saleUnit === 'G' || row.saleUnit === 'L' || row.saleUnit === 'ML'
+                                ? `${row.soldQty.toFixed(3).replace('.', ',')} ${row.saleUnit}`
+                                : row.soldQty}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">{brl(row.revenue)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{brl(row.unitCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{brl(row.theoryCost)}</TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.wasteCost > 0 ? <span className="text-destructive">{brl(row.wasteCost)}</span> : '—'}
+                            </TableCell>
+                            <TableCell className={`text-right tabular-nums font-medium ${row.margin < 0 ? 'text-destructive' : 'text-emerald-400'}`}>
+                              {brl(row.margin)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.marginPct !== null ? `${row.marginPct.toFixed(1).replace('.', ',')}%` : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground py-10 text-center text-sm">
+                    Sem vendas no período para calcular rentabilidade.
+                  </p>
                 )}
               </CardContent>
             </Card>

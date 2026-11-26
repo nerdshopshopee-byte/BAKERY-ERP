@@ -14,10 +14,20 @@ export type ProductDTO = {
   name: string
   categoryId?: string | null
   unit: string
+  saleUnit?: string
   price: number
   cost: number
   barcode?: string | null
+  plu?: string | null
   byWeight: boolean
+  isWeighable?: boolean
+  tara?: number
+  shelfLifeDays?: number | null
+  lotControl?: boolean
+  weighDepartment?: string | null
+  trackStock?: boolean
+  stock?: number
+  minStock?: number
   isKitchen: boolean
   active: boolean
   notes?: string | null
@@ -61,6 +71,39 @@ export type RecipeItemDTO = {
   costPerUnit?: number | null
 }
 
+export type RecipeModifierDTO = {
+  id: string
+  recipeId?: string | null
+  productId?: string | null
+  name: string
+  kind: 'ADDITION' | 'REMOVAL' | 'OPTION'
+  ingredientId: string | null
+  ingredientName?: string | null
+  qty: number
+  unit: string
+  extraCost: number
+  extraPrice: number
+  computedCost?: number
+  sortOrder: number
+  active: boolean
+}
+
+export type FichaTecnicaDTO = {
+  ingredientsCost: number
+  laborCost: number
+  packagingCost: number
+  lossCost: number
+  totalCost: number
+  yieldQty: number
+  costPerUnit: number
+  salePrice: number | null
+  marginPerUnit: number | null
+  marginPct: number | null
+  targetMarginPct: number | null
+  suggestedPrice: number | null
+  modifierCostsTotal: number
+}
+
 export type RecipeDTO = {
   id: string
   name: string
@@ -68,9 +111,16 @@ export type RecipeDTO = {
   yieldQty: number
   unit: string
   laborCost: number
+  packagingCost: number
+  lossPct: number
+  prepTimeMin?: number | null
+  targetMarginPct?: number | null
   notes?: string | null
   items: RecipeItemDTO[]
-  totalCost: number // custo dos ingredientes do lote + mão de obra
+  modifiers: RecipeModifierDTO[]
+  ficha?: FichaTecnicaDTO
+  productName?: string | null
+  totalCost: number // custo do lote (insumos + perda + mão de obra + embalagem)
   costPerUnit: number
 }
 

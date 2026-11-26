@@ -109,6 +109,40 @@ export async function POST(request: NextRequest) {
     unit = unitValue
   }
 
+  // Unidade de venda/pesagem: UN | KG | G | L | ML
+  const VALID_SALE_UNITS = ['UN', 'KG', 'G', 'L', 'ML']
+  let saleUnit = unit
+  if (typeof body.saleUnit === 'string' && body.saleUnit.trim() !== '') {
+    const saleUnitValue = body.saleUnit.trim().toUpperCase()
+    if (!VALID_SALE_UNITS.includes(saleUnitValue)) {
+      return Response.json({ error: 'saleUnit inválida (UN, KG, G, L, ML)' }, { status: 400 })
+    }
+    saleUnit = saleUnitValue
+  }
+
+  const isWeighable = typeof body.isWeighable === 'boolean' ? body.isWeighable : false
+  const tara = typeof body.tara === 'number' && Number.isFinite(body.tara) && body.tara >= 0 ? body.tara : 0
+  const shelfLifeDays =
+    typeof body.shelfLifeDays === 'number' && Number.isFinite(body.shelfLifeDays) && body.shelfLifeDays > 0
+      ? Math.trunc(body.shelfLifeDays)
+      : null
+  const lotControl = typeof body.lotControl === 'boolean' ? body.lotControl : false
+  const trackStock = typeof body.trackStock === 'boolean' ? body.trackStock : false
+  const stock = typeof body.stock === 'number' && Number.isFinite(body.stock) && body.stock >= 0 ? body.stock : 0
+  const minStock = typeof body.minStock === 'number' && Number.isFinite(body.minStock) && body.minStock >= 0 ? body.minStock : 0
+
+  // PLU único quando preenchido (numérico, até 6 dígitos)
+  let plu: string | null = str(body.plu)
+  if (plu !== null) {
+    if (!/^\d{1,6}$/.test(plu)) {
+      return Response.json({ error: 'PLU deve ser numérico com até 6 dígitos' }, { status: 400 })
+    }
+    const taken = await db.product.findFirst({ where: { plu } })
+    if (taken) {
+      return Response.json({ error: `PLU ${plu} já cadastrado para "${taken.name}"` }, { status: 409 })
+    }
+  }
+
   let categoryId: string | null = null
   const categoryIdInput = str(body.categoryId)
   if (categoryIdInput) {
@@ -124,10 +158,20 @@ export async function POST(request: NextRequest) {
       name,
       categoryId,
       unit,
+      saleUnit,
       price: round2(price),
       cost: round2(cost),
       barcode: str(body.barcode),
-      byWeight: typeof body.byWeight === 'boolean' ? body.byWeight : false,
+      plu,
+      byWeight: isWeighable || (typeof body.byWeight === 'boolean' ? body.byWeight : false),
+      isWeighable,
+      tara,
+      shelfLifeDays,
+      lotControl,
+      weighDepartment: str(body.weighDepartment),
+      trackStock,
+      stock,
+      minStock,
       isKitchen: typeof body.isKitchen === 'boolean' ? body.isKitchen : true,
       active: typeof body.active === 'boolean' ? body.active : true,
       notes: str(body.notes),

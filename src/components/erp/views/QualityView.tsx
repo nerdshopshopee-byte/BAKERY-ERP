@@ -52,6 +52,9 @@ const REASON_LABELS: Record<string, string> = {
   QUEIMADO: 'Queimado / assado demais',
   ERRO_PRODUCAO: 'Erro de produção',
   DEVOLUCAO: 'Devolução do cliente',
+  DANIFICADO: 'Danificado',
+  SOBRA: 'Sobra de produção',
+  DESCARTE: 'Descarte',
   OUTROS: 'Outros',
 }
 
@@ -73,10 +76,12 @@ type WasteForm = {
   itemId: string
   qty: string
   reason: string
+  sector: string
+  lot: string
   notes: string
 }
 
-const emptyForm: WasteForm = { itemType: 'PRODUCT', itemId: '', qty: '', reason: 'VENCIDO', notes: '' }
+const emptyForm: WasteForm = { itemType: 'PRODUCT', itemId: '', qty: '', reason: 'VENCIDO', sector: '', lot: '', notes: '' }
 
 // ============ View ============
 
@@ -162,8 +167,8 @@ export default function QualityView({ operator }: ViewProps) {
     try {
       const body =
         form.itemType === 'PRODUCT'
-          ? { itemType: 'PRODUCT', productId: form.itemId, qty, reason: form.reason, actor: operator.name, notes: form.notes.trim() || undefined }
-          : { itemType: 'INGREDIENT', ingredientId: form.itemId, qty, reason: form.reason, actor: operator.name, notes: form.notes.trim() || undefined }
+          ? { itemType: 'PRODUCT', productId: form.itemId, qty, reason: form.reason, actor: operator.name, sector: form.sector.trim() || undefined, lot: form.lot.trim() || undefined, notes: form.notes.trim() || undefined }
+          : { itemType: 'INGREDIENT', ingredientId: form.itemId, qty, reason: form.reason, actor: operator.name, sector: form.sector.trim() || undefined, lot: form.lot.trim() || undefined, notes: form.notes.trim() || undefined }
       const created = await apiPost<WasteRecordDTO>('/api/waste', body)
       toast.success('Perda registrada', {
         description: `${created.name} · ${num(created.qty, 2)} ${created.unit ?? ''} · ${brl(created.cost)} em custo`,
@@ -437,6 +442,26 @@ export default function QualityView({ operator }: ViewProps) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2">
+                <Label htmlFor="waste-sector">Setor</Label>
+                <Input
+                  id="waste-sector"
+                  value={form.sector}
+                  onChange={(e) => setForm((f) => ({ ...f, sector: e.target.value }))}
+                  placeholder="Ex.: Padaria"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="waste-lot">Lote</Label>
+                <Input
+                  id="waste-lot"
+                  value={form.lot}
+                  onChange={(e) => setForm((f) => ({ ...f, lot: e.target.value }))}
+                  placeholder="Ex.: L2026-0428"
+                />
               </div>
             </div>
             <div className="grid gap-2">

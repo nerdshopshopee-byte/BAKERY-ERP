@@ -34,6 +34,7 @@ export const DEFAULT_ROLES: DefaultRole[] = [
       'cash.view', 'cash.open', 'cash.close', 'cash.movements',
       'finance.view', 'finance.cashflow', 'finance.payables.view', 'finance.payables.manage', 'finance.receivables.view', 'finance.receivables.manage', 'finance.revenue', 'finance.profit', 'finance.dre', 'finance.payments',
       'fiscal.view', 'fiscal.emit', 'fiscal.cancel', 'fiscal.inutilize', 'fiscal.config', 'fiscal.tables',
+      'scales.view', 'scales.manage', 'scales.sync',
       'reports.view', 'reports.export',
       'customers.view', 'customers.manage',
       'employees.view', 'employees.manage', 'employees.timelog', 'employees.schedules',
@@ -55,6 +56,7 @@ export const DEFAULT_ROLES: DefaultRole[] = [
       'cash.view', 'cash.open', 'cash.close', 'cash.movements',
       'finance.view', 'finance.cashflow', 'finance.payables.view', 'finance.payables.manage', 'finance.receivables.view', 'finance.receivables.manage', 'finance.revenue', 'finance.profit', 'finance.dre', 'finance.payments',
       'fiscal.view', 'fiscal.emit', 'fiscal.cancel',
+      'scales.view', 'scales.sync',
       'reports.view', 'reports.export',
       'customers.view', 'customers.manage',
       'employees.view', 'employees.manage', 'employees.timelog', 'employees.schedules',
@@ -83,6 +85,7 @@ export const DEFAULT_ROLES: DefaultRole[] = [
       'orders.view', 'orders.status',
       'production.view', 'production.recipes.view', 'production.orders.create', 'production.orders.execute', 'production.losses',
       'inventory.view', 'inventory.entries', 'inventory.exits', 'inventory.adjust',
+      'scales.view', 'scales.sync',
     ],
   },
   {

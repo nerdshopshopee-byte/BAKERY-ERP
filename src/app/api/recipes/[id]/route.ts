@@ -29,6 +29,10 @@ type RecipeUpdate = {
   name?: string
   notes?: string | null
   laborCost?: number
+  packagingCost?: number
+  lossPct?: number
+  prepTimeMin?: number | null
+  targetMarginPct?: number | null
   yieldQty?: number
   unit?: string
 }
@@ -65,6 +69,49 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     update.laborCost = round2(laborCost)
   }
 
+  if ('packagingCost' in body) {
+    const packagingCost = body.packagingCost
+    if (typeof packagingCost !== 'number' || !Number.isFinite(packagingCost) || packagingCost < 0) {
+      return Response.json({ error: 'packagingCost deve ser um número >= 0' }, { status: 400 })
+    }
+    update.packagingCost = round2(packagingCost)
+  }
+
+  if ('lossPct' in body) {
+    const lossPct = body.lossPct
+    if (typeof lossPct !== 'number' || !Number.isFinite(lossPct) || lossPct < 0 || lossPct > 100) {
+      return Response.json({ error: 'lossPct deve ser um número entre 0 e 100' }, { status: 400 })
+    }
+    update.lossPct = lossPct
+  }
+
+  if ('prepTimeMin' in body) {
+    const prepTimeMin = body.prepTimeMin
+    if (prepTimeMin === null) {
+      update.prepTimeMin = null
+    } else if (typeof prepTimeMin === 'number' && Number.isFinite(prepTimeMin) && prepTimeMin >= 0) {
+      update.prepTimeMin = Math.trunc(prepTimeMin)
+    } else {
+      return Response.json({ error: 'prepTimeMin deve ser minutos >= 0' }, { status: 400 })
+    }
+  }
+
+  if ('targetMarginPct' in body) {
+    const targetMarginPct = body.targetMarginPct
+    if (targetMarginPct === null) {
+      update.targetMarginPct = null
+    } else if (
+      typeof targetMarginPct === 'number' &&
+      Number.isFinite(targetMarginPct) &&
+      targetMarginPct >= 0 &&
+      targetMarginPct < 100
+    ) {
+      update.targetMarginPct = targetMarginPct
+    } else {
+      return Response.json({ error: 'targetMarginPct deve ser % entre 0 e 99' }, { status: 400 })
+    }
+  }
+
   if ('yieldQty' in body) {
     const yieldQty = body.yieldQty
     if (typeof yieldQty !== 'number' || !Number.isFinite(yieldQty) || yieldQty <= 0) {
@@ -81,7 +128,38 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     update.unit = unit
   }
 
-  const recipe = await db.recipe.update({ where: { id }, data: update })
+  const recipe = await db.$transaction(async (tx) => {
+    const updated = await tx.recipe.update({ where: { id }, data: update })
+
+    // Histórico de custo: snapshot automático quando campos de custo mudam
+    const costRelevant = [
+      'laborCost',
+      'packagingCost',
+      'lossPct',
+      'yieldQty',
+    ] as const
+    if (costRelevant.some((key) => key in update)) {
+      const items = await tx.recipeItem.findMany({ where: { recipeId: id } })
+      const ingredients = await tx.ingredient.findMany()
+      const ingredientMap = new Map(ingredients.map((i) => [i.id, i]))
+      const ingredientsCost = items.reduce(
+        (acc, item) => acc + item.qty * (ingredientMap.get(item.ingredientId)?.costPerUnit ?? 0),
+        0,
+      )
+      const lossCost = ingredientsCost * (updated.lossPct / 100)
+      const totalCost = ingredientsCost + lossCost + updated.laborCost + updated.packagingCost
+      const yieldQty = updated.yieldQty > 0 ? updated.yieldQty : 1
+      await tx.recipeCostSnapshot.create({
+        data: {
+          recipeId: id,
+          totalCost: Math.round(totalCost * 100 + Number.EPSILON) / 100,
+          costPerUnit: Math.round((totalCost / yieldQty) * 100 + Number.EPSILON) / 100,
+          source: 'AUTO',
+        },
+      })
+    }
+    return updated
+  })
   return Response.json(recipe)
 }
 

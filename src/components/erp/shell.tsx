@@ -32,6 +32,7 @@ import {
   ScrollText,
   Package,
   QrCode,
+  Scale,
   ShieldCheck,
   ShieldX,
   ShoppingCart,
@@ -75,6 +76,7 @@ import { useAppStore, type ModuleKey, type Operator } from '@/lib/store'
 import { MODULE_PERMISSION } from '@/lib/auth/permissions'
 
 import type { ViewProps } from './view-props'
+import ScalesView from './views/ScalesView'
 import DashboardView from './views/DashboardView'
 import PdvView from './views/PdvView'
 import OrdersView from './views/OrdersView'
@@ -131,6 +133,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'finance', label: 'Financeiro', icon: Landmark },
       { key: 'payments', label: 'Mercado Pago', icon: QrCode },
       { key: 'fiscal', label: 'Fiscal', icon: ScrollText },
+      { key: 'scales', label: 'Equipamentos - Balanças', icon: Scale },
       { key: 'reports', label: 'Relatórios', icon: BarChart3 },
     ],
   },
@@ -163,6 +166,8 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   employees: 'Equipe',
   customers: 'Clientes',
   payments: 'Mercado Pago',
+  fiscal: 'Fiscal',
+  scales: 'Equipamentos - Balanças',
   settings: 'Configurações - Usuários e Permissões',
 }
 
@@ -184,6 +189,7 @@ const VIEWS: Record<ModuleKey, ComponentType<ViewProps>> = {
   customers: CustomersView,
   payments: PaymentsView,
   fiscal: FiscalView,
+  scales: ScalesView,
   settings: UsersView,
 }
 
@@ -770,7 +776,7 @@ export function ErpShell() {
 
   // ---------- Menu dinâmico conforme permissões efetivas ----------
   const allowed: ModuleKey[] = (
-    ['dashboard', 'pdv', 'orders', 'bookings', 'delivery', 'production', 'products', 'quality', 'stock', 'purchases', 'cash', 'finance', 'payments', 'fiscal', 'reports', 'employees', 'customers', 'settings'] as ModuleKey[]
+    ['dashboard', 'pdv', 'orders', 'bookings', 'delivery', 'production', 'products', 'quality', 'stock', 'purchases', 'cash', 'finance', 'payments', 'fiscal', 'scales', 'reports', 'employees', 'customers', 'settings'] as ModuleKey[]
   ).filter(
     (key) => operator.isAbsolute || operator.permissions.includes(MODULE_PERMISSION[key])
   )

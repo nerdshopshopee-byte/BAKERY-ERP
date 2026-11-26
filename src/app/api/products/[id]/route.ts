@@ -29,10 +29,20 @@ type ProductUpdate = {
   name?: string
   categoryId?: string | null
   unit?: string
+  saleUnit?: string
   price?: number
   cost?: number
   barcode?: string | null
+  plu?: string | null
   byWeight?: boolean
+  isWeighable?: boolean
+  tara?: number
+  shelfLifeDays?: number | null
+  lotControl?: boolean
+  weighDepartment?: string | null
+  trackStock?: boolean
+  stock?: number
+  minStock?: number
   isKitchen?: boolean
   active?: boolean
   notes?: string | null
@@ -76,6 +86,88 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return Response.json({ error: "Unidade inválida (use 'UN' ou 'KG')" }, { status: 400 })
     }
     update.unit = body.unit
+  }
+
+  if ('saleUnit' in body) {
+    const VALID_SALE_UNITS = ['UN', 'KG', 'G', 'L', 'ML']
+    const saleUnit = typeof body.saleUnit === 'string' ? body.saleUnit.trim().toUpperCase() : ''
+    if (!VALID_SALE_UNITS.includes(saleUnit)) {
+      return Response.json({ error: 'saleUnit inválida (UN, KG, G, L, ML)' }, { status: 400 })
+    }
+    update.saleUnit = saleUnit
+  }
+
+  if ('plu' in body) {
+    const plu = str(body.plu)
+    if (plu !== null) {
+      if (!/^\d{1,6}$/.test(plu)) {
+        return Response.json({ error: 'PLU deve ser numérico com até 6 dígitos' }, { status: 400 })
+      }
+      const taken = await db.product.findFirst({ where: { plu, id: { not: id } } })
+      if (taken) {
+        return Response.json({ error: `PLU ${plu} já cadastrado para "${taken.name}"` }, { status: 409 })
+      }
+    }
+    update.plu = plu
+  }
+
+  if ('isWeighable' in body) {
+    if (typeof body.isWeighable !== 'boolean') {
+      return Response.json({ error: 'isWeighable deve ser booleano' }, { status: 400 })
+    }
+    update.isWeighable = body.isWeighable
+    if (body.isWeighable) update.byWeight = true
+  }
+
+  if ('tara' in body) {
+    const tara = body.tara
+    if (typeof tara !== 'number' || !Number.isFinite(tara) || tara < 0) {
+      return Response.json({ error: 'Tara deve ser um número >= 0 (gramas)' }, { status: 400 })
+    }
+    update.tara = tara
+  }
+
+  if ('shelfLifeDays' in body) {
+    const days = body.shelfLifeDays
+    if (days === null) {
+      update.shelfLifeDays = null
+    } else if (typeof days === 'number' && Number.isFinite(days) && days > 0) {
+      update.shelfLifeDays = Math.trunc(days)
+    } else {
+      return Response.json({ error: 'Validade deve ser dias > 0' }, { status: 400 })
+    }
+  }
+
+  if ('lotControl' in body) {
+    if (typeof body.lotControl !== 'boolean') {
+      return Response.json({ error: 'lotControl deve ser booleano' }, { status: 400 })
+    }
+    update.lotControl = body.lotControl
+  }
+
+  if ('weighDepartment' in body) update.weighDepartment = str(body.weighDepartment)
+
+  if ('trackStock' in body) {
+    if (typeof body.trackStock !== 'boolean') {
+      return Response.json({ error: 'trackStock deve ser booleano' }, { status: 400 })
+    }
+    update.trackStock = body.trackStock
+  }
+
+  if ('stock' in body) {
+    const stock = body.stock
+    if (typeof stock !== 'number' || !Number.isFinite(stock) || stock < 0) {
+      return Response.json({ error: 'Estoque deve ser um número >= 0' }, { status: 400 })
+    }
+    update.stock = stock
+  }
+
+  if ('minStock' in body) {
+    const minStock = body.minStock
+    if (typeof minStock !== 'number' || !Number.isFinite(minStock) || minStock < 0) {
+      return Response.json({ error: 'Estoque mínimo deve ser um número >= 0' }, { status: 400 })
+    }
+    update.minStock = minStock
   }
 
   if ('price' in body) {
