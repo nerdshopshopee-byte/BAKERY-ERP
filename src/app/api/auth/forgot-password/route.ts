@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createHash, randomBytes } from 'crypto'
 import { db } from '@/lib/db'
 import { clientIp, logAccess } from '@/lib/auth/audit'
+import { ensureDemoAuthData } from '@/lib/auth/bootstrap'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,9 @@ export async function POST(request: NextRequest) {
     if (!email) {
       return NextResponse.json({ error: 'Informe o e-mail cadastrado' }, { status: 400 })
     }
+
+    // Auto-bootstrap: garante contas de demonstração mesmo com banco vazio
+    await ensureDemoAuthData()
 
     const user = await db.user.findUnique({ where: { email } })
 

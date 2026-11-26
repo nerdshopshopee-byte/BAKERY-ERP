@@ -5,6 +5,7 @@ import { verifyPassword } from '@/lib/auth/password'
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth/session'
 import { computeEffectivePermissions } from '@/lib/auth/effective'
 import { clientIp, logAccess, userAgent } from '@/lib/auth/audit'
+import { ensureDemoAuthData } from '@/lib/auth/bootstrap'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,9 @@ export async function POST(request: NextRequest) {
     if (!email || !password) {
       return NextResponse.json({ error: 'Informe e-mail e senha' }, { status: 400 })
     }
+
+    // Auto-bootstrap: garante contas de demonstração mesmo com banco vazio
+    await ensureDemoAuthData()
 
     const user = await db.user.findUnique({
       where: { email },

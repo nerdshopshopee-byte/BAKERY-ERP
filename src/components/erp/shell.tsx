@@ -754,9 +754,13 @@ export function ErpShell() {
     return (
       <LoginScreen
         onLoggedIn={(user) => {
-          setOperator(toOperator(user))
-          setRequested('dashboard')
-          toast.success(`Bem-vindo, ${user.name}`, {
+          const op = toOperator(user)
+          setOperator(op)
+          // Só abre o dashboard se o perfil do usuário puder vê-lo;
+          // caso contrário, seleciona automaticamente o primeiro módulo autorizado.
+          const canDashboard = op.isAbsolute || op.permissions.includes('dashboard.view')
+          setRequested(canDashboard ? 'dashboard' : null)
+          toast.success(`Bem-vindo, ${op.name}`, {
             description: 'Sessão individual iniciada com sucesso.',
           })
         }}
