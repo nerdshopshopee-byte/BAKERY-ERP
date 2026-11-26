@@ -152,7 +152,8 @@ export type SupplierDTO = {
 export type PurchaseItemDTO = {
   id: string
   purchaseId: string
-  ingredientId: string
+  ingredientId?: string | null
+  productId?: string | null
   name: string
   unit: string
   qty: number
@@ -167,6 +168,11 @@ export type PurchaseDTO = {
   status: 'PENDENTE' | 'RECEBIDA' | 'CANCELADA'
   total: number
   notes?: string | null
+  documentType?: string | null
+  documentNumber?: string | null
+  documentSeries?: string | null
+  issuerName?: string | null
+  issuerCnpj?: string | null
   receivedAt?: string | null
   createdAt: string
   items: PurchaseItemDTO[]

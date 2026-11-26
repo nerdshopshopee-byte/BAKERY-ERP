@@ -731,6 +731,18 @@ export function ErpShell() {
     return () => window.removeEventListener('focus', onFocus)
   }, [operator, refreshSession])
 
+  // Tick do agendamento de backups (a cada 5 minutos com sessão ativa):
+  // o backend decide se a janela configurada venceu e executa o backup automático
+  useEffect(() => {
+    if (!operator) return
+    const tick = () => {
+      apiPost('/api/backup/check').catch(() => undefined)
+    }
+    tick()
+    const timer = setInterval(tick, 5 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [operator])
+
   async function handleLogout() {
     try {
       await apiPost('/api/auth/logout')

@@ -143,27 +143,35 @@ model Supplier {
 }
 
 model Purchase {
-  id         String         @id @default(cuid())
-  code       String
-  supplierId String
-  supplier   String
-  status     String         @default("PENDENTE") // PENDENTE | RECEBIDA | CANCELADA
-  total      Float          @default(0)
-  notes      String?
-  receivedAt DateTime?
-  createdAt  DateTime       @default(now())
-  items      PurchaseItem[] // declarativo
+  id             String         @id @default(cuid())
+  code           String
+  supplierId     String
+  supplier       String
+  status         String         @default("PENDENTE") // PENDENTE | RECEBIDA | CANCELADA
+  total          Float          @default(0)
+  notes          String?
+  // Origem da compra: importação de documento fiscal (NF-e XML) ou lançamento manual
+  documentType   String?        // NFE | MANUAL
+  documentNumber String?        // nNF da NF-e importada
+  documentSeries String?
+  issuerName     String?        // emitente da NF-e (fornecedor)
+  issuerCnpj     String?
+  sourceXml      String?        // XML original armazenado para auditoria
+  receivedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  items          PurchaseItem[] // declarativo
 }
 
 model PurchaseItem {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   purchaseId   String
-  ingredientId String
+  ingredientId String?   // itens de insumo (produção)
+  productId    String?   // itens de produto pronto/revenda (importação XML)
   name         String
   unit         String
   qty          Float
   unitCost     Float
-  purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchase     Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 }
 
 // Consumo real de insumos por ordem de produção (previsto vs efetivo)
@@ -880,4 +888,37 @@ model FiscalEvent {
   author     String?
   createdAt  DateTime @default(now())
   document   FiscalDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// ============ BACKUP E RESTAURAÇÃO ============
+
+// Regras de backup (registro único - singleton). O agendamento é executado
+// por verificação lazy (tick periódico do cliente autenticado + checagem no backend).
+model BackupSetting {
+  id              String    @id @default("default")
+  enabled         Boolean   @default(true) // agendamento automático ativo
+  frequencyType   String    @default("MANUAL") // MANUAL | HOURLY | DAILY | WEEKLY
+  timeOfDay       String?   // "HH:MM" (hora local do servidor) para DAILY/WEEKLY
+  weekday         Int?      // 0-6 (domingo=0) para WEEKLY
+  retentionCount  Int       @default(10) // quantidade máxima de arquivos de backup mantidos
+  notifyOnFailure Boolean   @default(true)
+  lastBackupAt    DateTime?
+  lastStatus      String?   // SUCESSO | FALHA
+  lastError       String?
+  lastRunBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Histórico de execuções de backup e restauração
+model BackupLog {
+  id         String   @id @default(cuid())
+  type       String   // MANUAL | AUTOMATICO | PRE_RESTORE | RESTAURACAO
+  status     String   // SUCESSO | FALHA
+  filename   String?
+  sizeBytes  Int?
+  durationMs Int?
+  message    String?  // detalhe, erro ou resumo da operação
+  operator   String?
+  createdAt  DateTime @default(now())
 }

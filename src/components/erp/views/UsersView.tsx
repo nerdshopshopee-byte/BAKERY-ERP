@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  DatabaseBackup,
   KeyRound,
   LogOut,
   MoreHorizontal,
@@ -30,6 +31,7 @@ import { apiDelete, apiGet, apiPatch, apiPost, apiSend } from '@/lib/api'
 import { PERMISSION_MODULES } from '@/lib/auth/permissions'
 import { dthr } from '@/lib/format'
 import type { Operator } from '@/lib/store'
+import BackupsTab from '@/components/erp/views/BackupsTab'
 import PermissionMatrix, { RolePermissionMatrix, type PermState } from '@/components/erp/permission-matrix'
 import type { ViewProps } from '@/components/erp/view-props'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -183,10 +185,11 @@ export default function UsersView({ operator }: ViewProps) {
   const canUsers = operator.isAbsolute || operator.permissions.includes('settings.users')
   const canRoles = operator.isAbsolute || operator.permissions.includes('settings.roles')
   const canAudit = operator.isAbsolute || operator.permissions.includes('settings.audit')
+  const canBackup = operator.isAbsolute || operator.permissions.includes('settings.backup')
 
-  const [activeTab, setActiveTab] = useState(() => (canUsers ? 'users' : canRoles ? 'roles' : 'audit'))
+  const [activeTab, setActiveTab] = useState(() => (canUsers ? 'users' : canRoles ? 'roles' : canBackup ? 'backups' : 'audit'))
 
-  if (!canUsers && !canRoles && !canAudit) {
+  if (!canUsers && !canRoles && !canAudit && !canBackup) {
     return (
       <div className="space-y-4">
         <div>
@@ -222,10 +225,10 @@ export default function UsersView({ operator }: ViewProps) {
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Users className="text-primary size-5" />
-            Usuários e permissões
+            Configurações do sistema
           </h2>
           <p className="text-muted-foreground text-sm">
-            Contas de acesso, perfis e trilha de auditoria · operador {operator.name}
+            Contas, perfis, auditoria e backups · operador {operator.name}
           </p>
         </div>
       </div>
@@ -250,6 +253,12 @@ export default function UsersView({ operator }: ViewProps) {
               Auditoria
             </TabsTrigger>
           )}
+          {canBackup && (
+            <TabsTrigger value="backups">
+              <DatabaseBackup className="size-4" />
+              Backups
+            </TabsTrigger>
+          )}
         </TabsList>
         {canUsers && (
           <TabsContent value="users" className="space-y-4">
@@ -264,6 +273,11 @@ export default function UsersView({ operator }: ViewProps) {
         {canAudit && (
           <TabsContent value="audit" className="space-y-4">
             <AuditTab />
+          </TabsContent>
+        )}
+        {canBackup && (
+          <TabsContent value="backups" className="space-y-4">
+            <BackupsTab operator={operator} />
           </TabsContent>
         )}
       </Tabs>

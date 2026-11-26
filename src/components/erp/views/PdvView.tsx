@@ -65,6 +65,10 @@ type CartLine = { product: ProductDTO; qty: number; fromScale?: boolean }
 type PaymentDraft = { id: string; method: PayMethod; amount: string }
 
 const round2 = (v: number) => Math.round(v * 100) / 100
+const round3 = (v: number) => Math.round(v * 1000) / 1000
+
+// Atalhos de peso (gramas) para pesagem manual sem balança integrada
+const QUICK_WEIGHTS = [100, 200, 250, 300, 500, 750, 1000]
 
 function parseNum(value: string): number {
   const n = Number(value.replace(',', '.').trim())
@@ -105,6 +109,21 @@ export default function PdvView({ operator }: ViewProps) {
   const [weighWeight, setWeighWeight] = useState('')
   const [weighResult, setWeighResult] = useState<{ qty: number; total: number; label: string } | null>(null)
   const [weighBusy, setWeighBusy] = useState(false)
+
+  // Modo manual: peso digitado sem balança integrada (a balança física mostra o peso,
+  // o operador digita aqui — a venda funciona das duas formas)
+  const weighManualQty = useMemo(() => {
+    const raw = weighWeight.replace(',', '.').trim()
+    if (!raw) return 0
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n <= 0) return 0
+    return round3(n)
+  }, [weighWeight])
+  const weighManualTotal = useMemo(
+    () => (weighProduct ? round2(weighManualQty * weighProduct.price) : 0),
+    [weighManualQty, weighProduct],
+  )
+  const canConfirmWeigh = weighResult !== null || weighManualQty > 0
   const [catFilter, setCatFilter] = useState<string>('all')
 
   // ---- carrinho ----
@@ -303,11 +322,20 @@ export default function PdvView({ operator }: ViewProps) {
   }
 
   function confirmWeigh() {
-    if (!weighProduct || !weighResult) return
-    addToCart(weighProduct, weighResult.qty, true)
-    toast.success(
-      `${weighProduct.name}: ${weighResult.qty.toFixed(3).replace('.', ',')} kg = ${brl(weighResult.total)}`,
-    )
+    if (!weighProduct) return
+    if (weighResult) {
+      addToCart(weighProduct, weighResult.qty, true)
+      toast.success(
+        `${weighProduct.name}: ${weighResult.qty.toFixed(3).replace('.', ',')} kg = ${brl(weighResult.total)}`,
+      )
+    } else if (weighManualQty > 0) {
+      // Venda por peso digitado — não exige balança vinculada ao sistema
+      addToCart(weighProduct, weighManualQty, true)
+      toast.success(
+        `${weighProduct.name}: ${weighManualQty.toFixed(3).replace('.', ',')} kg = ${brl(weighManualTotal)}`,
+        { description: 'Peso digitado manualmente (balança não integrada)' },
+      )
+    }
     setWeighOpen(false)
   }
 
@@ -577,13 +605,13 @@ export default function PdvView({ operator }: ViewProps) {
                       <div className="flex items-center gap-1">
                         <Input
                           type="number"
-                          min={0.1}
-                          step={0.1}
+                          min={0.001}
+                          step={0.001}
                           value={line.qty}
                           onChange={(e) => {
                             const v = Number(e.target.value)
                             if (!Number.isFinite(v) || v <= 0) return
-                            setQty(line.product.id, round2(v))
+                            setQty(line.product.id, round3(v))
                           }}
                           className="h-8 w-24 tabular-nums"
                         />
@@ -948,26 +976,52 @@ export default function PdvView({ operator }: ViewProps) {
       <Dialog open={weighOpen} onOpenChange={setWeighOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Pesagem direta — {weighProduct?.name}</DialogTitle>
+            <DialogTitle>Pesagem — {weighProduct?.name}</DialogTitle>
             <DialogDescription>
-              Coloque o item na balança e aguarde leitura estável, ou digite o peso
+              Com balança integrada: clique em Ler balança. Sem integração: pese na balança física,
+              digite o peso mostrado e confirme — a venda funciona das duas formas.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg border bg-muted/40 p-4 text-center">
               <p className="text-3xl font-bold tabular-nums">
-                {weighResult ? `${weighResult.qty.toFixed(3).replace('.', ',')} kg` : weighWeight ? `${weighWeight} kg` : '— — —'}
+                {weighResult
+                  ? `${weighResult.qty.toFixed(3).replace('.', ',')} kg`
+                  : weighManualQty > 0
+                    ? `${weighManualQty.toFixed(3).replace('.', ',')} kg`
+                    : '— — —'}
               </p>
-              {weighResult && (
+              {weighResult ? (
                 <p className="mt-1 text-sm text-muted-foreground">
                   {brl(weighProduct?.price ?? 0)}/kg · total{' '}
-                  <span className="font-semibold text-foreground">
-                    {brl(weighResult.total)}
-                  </span>{' '}
-                  · leitura estável
+                  <span className="font-semibold text-foreground">{brl(weighResult.total)}</span> · leitura da balança integrada
                 </p>
-              )}
+              ) : weighManualQty > 0 ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {brl(weighProduct?.price ?? 0)}/kg · total{' '}
+                  <span className="font-semibold text-foreground">{brl(weighManualTotal)}</span> · peso digitado manualmente
+                </p>
+              ) : null}
             </div>
+
+            {/* Atalhos de peso rápido (gramas) */}
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_WEIGHTS.map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setWeighWeight((g / 1000).toFixed(3))}
+                  className={`rounded-full border px-2.5 py-1 text-xs tabular-nums transition-colors ${
+                    weighManualQty > 0 && Math.abs(weighManualQty - g / 1000) < 0.0005
+                      ? 'border-transparent bg-primary text-primary-foreground'
+                      : 'bg-card text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  {g >= 1000 ? '1 kg' : `${g} g`}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
                 <Label htmlFor="w-weight">Peso (kg)</Label>
@@ -977,6 +1031,7 @@ export default function PdvView({ operator }: ViewProps) {
                   value={weighWeight}
                   onChange={(e) => setWeighWeight(e.target.value)}
                   placeholder="Ex.: 0,450"
+                  autoFocus
                 />
               </div>
               <div className="flex items-end">
@@ -996,7 +1051,7 @@ export default function PdvView({ operator }: ViewProps) {
             <Button variant="outline" onClick={() => setWeighOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={confirmWeigh} disabled={!weighResult}>
+            <Button onClick={confirmWeigh} disabled={!canConfirmWeigh}>
               Adicionar ao carrinho
             </Button>
           </DialogFooter>

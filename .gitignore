@@ -56,6 +56,9 @@ server.log
 # local data & workspace artifacts
 /db/*.db
 /db/*.db-journal
+/db/*.db-wal
+/db/*.db-shm
+/db/backups/
 /tool-results/
 /download/
 /upload/

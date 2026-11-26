@@ -38,7 +38,7 @@ export const DEFAULT_ROLES: DefaultRole[] = [
       'reports.view', 'reports.export',
       'customers.view', 'customers.manage',
       'employees.view', 'employees.manage', 'employees.timelog', 'employees.schedules',
-      'settings.view', 'settings.users', 'settings.roles', 'settings.permissions', 'settings.audit',
+      'settings.view', 'settings.users', 'settings.roles', 'settings.permissions', 'settings.audit', 'settings.backup',
     ],
   },
   {

@@ -176,6 +176,7 @@ export const PERMISSION_MODULES: PermissionModuleDef[] = [
       { key: 'settings.roles', label: 'Gerenciar perfis' },
       { key: 'settings.permissions', label: 'Alterar permissões' },
       { key: 'settings.audit', label: 'Consultar auditoria' },
+      { key: 'settings.backup', label: 'Backup e restauração do sistema' },
     ],
   },
 ]
